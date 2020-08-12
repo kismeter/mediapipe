@@ -35,13 +35,13 @@ const int64 kSlowCalculatorRate = 10;
 
 // Rate limiter for TestSlowCalculator.
 ABSL_CONST_INIT absl::Mutex g_source_mutex(absl::kConstInit);
-int64 g_source_counter GUARDED_BY(g_source_mutex);
+int64 g_source_counter ABSL_GUARDED_BY(g_source_mutex);
 
 // Rate limiter for TestSourceCalculator.
-int64 g_slow_counter GUARDED_BY(g_source_mutex);
+int64 g_slow_counter ABSL_GUARDED_BY(g_source_mutex);
 
 // Flag that indicates that the source is done.
-bool g_source_done GUARDED_BY(g_source_mutex);
+bool g_source_done ABSL_GUARDED_BY(g_source_mutex);
 
 class TestSourceCalculator : public CalculatorBase {
  public:
@@ -74,7 +74,7 @@ class TestSourceCalculator : public CalculatorBase {
   }
 
  private:
-  bool CanProceed() const EXCLUSIVE_LOCKS_REQUIRED(g_source_mutex) {
+  bool CanProceed() const ABSL_EXCLUSIVE_LOCKS_REQUIRED(g_source_mutex) {
     return g_source_counter <= kSlowCalculatorRate * g_slow_counter ||
            g_source_counter <= 1;
   }
@@ -109,7 +109,7 @@ class TestSlowCalculator : public CalculatorBase {
   }
 
  private:
-  bool CanProceed() const EXCLUSIVE_LOCKS_REQUIRED(g_source_mutex) {
+  bool CanProceed() const ABSL_EXCLUSIVE_LOCKS_REQUIRED(g_source_mutex) {
     return g_source_counter > kSlowCalculatorRate * g_slow_counter ||
            g_source_done;
   }
@@ -165,8 +165,8 @@ TEST_P(FixedSizeInputStreamHandlerTest, DropsPackets) {
   std::vector<Packet> output_packets;
   tool::AddVectorSink("output_packets", &graph_config, &output_packets);
   CalculatorGraph graph;
-  MEDIAPIPE_ASSERT_OK(graph.Initialize(graph_config));
-  MEDIAPIPE_ASSERT_OK(graph.Run());
+  MP_ASSERT_OK(graph.Initialize(graph_config));
+  MP_ASSERT_OK(graph.Run());
 
   // The TestSlowCalculator consumes one packet after every tenth packet
   // is sent.  All other packets are dropped by the FixedSizeInputStreamHandler.
@@ -209,10 +209,10 @@ TEST_P(FixedSizeInputStreamHandlerTest, DropsPacketsInFullStream) {
   std::vector<Packet> output_packets;
   tool::AddVectorSink("output_packets", &graph_config, &output_packets);
   CalculatorGraph graph;
-  MEDIAPIPE_ASSERT_OK(
+  MP_ASSERT_OK(
       graph.Initialize(graph_config, {{"max_count", MakePacket<int>(10)},
                                       {"batch_size", MakePacket<int>(10)}}));
-  MEDIAPIPE_ASSERT_OK(graph.Run());
+  MP_ASSERT_OK(graph.Run());
 }
 
 // Tests FixedSizeInputStreamHandler with several input streams running
@@ -249,8 +249,8 @@ TEST_P(FixedSizeInputStreamHandlerTest, ParallelWriteAndRead) {
                         &output_packets[i]);
   }
   CalculatorGraph graph;
-  MEDIAPIPE_ASSERT_OK(graph.Initialize(graph_config, {}));
-  MEDIAPIPE_ASSERT_OK(graph.StartRun({}));
+  MP_ASSERT_OK(graph.Initialize(graph_config, {}));
+  MP_ASSERT_OK(graph.StartRun({}));
 
   {
     ::mediapipe::ThreadPool pool(3);
@@ -262,15 +262,15 @@ TEST_P(FixedSizeInputStreamHandlerTest, ParallelWriteAndRead) {
         std::string stream_name = absl::StrCat("in_", w);
         for (int i = 0; i < 50; ++i) {
           Packet p = MakePacket<int>(i).At(Timestamp(i));
-          MEDIAPIPE_EXPECT_OK(graph.AddPacketToInputStream(stream_name, p));
+          MP_EXPECT_OK(graph.AddPacketToInputStream(stream_name, p));
           absl::SleepFor(absl::Microseconds(100));
         }
       });
     }
   }
 
-  MEDIAPIPE_ASSERT_OK(graph.CloseAllInputStreams());
-  MEDIAPIPE_ASSERT_OK(graph.WaitUntilDone());
+  MP_ASSERT_OK(graph.CloseAllInputStreams());
+  MP_ASSERT_OK(graph.WaitUntilDone());
   for (int i = 0; i < 3; ++i) {
     EXPECT_EQ(output_packets[i].size(), output_packets[0].size());
     for (int j = 0; j < output_packets[i].size(); j++) {
@@ -320,27 +320,27 @@ TEST_P(FixedSizeInputStreamHandlerTest, LateArrivalDrop) {
                         &output_packets[i]);
   }
   CalculatorGraph graph;
-  MEDIAPIPE_ASSERT_OK(graph.Initialize(graph_config, {}));
-  MEDIAPIPE_ASSERT_OK(graph.StartRun({}));
+  MP_ASSERT_OK(graph.Initialize(graph_config, {}));
+  MP_ASSERT_OK(graph.StartRun({}));
 
   for (int i = 1; i <= 6; i++) {
-    MEDIAPIPE_EXPECT_OK(graph.AddPacketToInputStream(
+    MP_EXPECT_OK(graph.AddPacketToInputStream(
         in_streams[0], MakePacket<int>(i).At(Timestamp(i))));
   }
   for (int i = 3; i <= 7; i++) {
-    MEDIAPIPE_EXPECT_OK(graph.AddPacketToInputStream(
+    MP_EXPECT_OK(graph.AddPacketToInputStream(
         in_streams[1], MakePacket<int>(i).At(Timestamp(i))));
-    MEDIAPIPE_ASSERT_OK(graph.WaitUntilIdle());
+    MP_ASSERT_OK(graph.WaitUntilIdle());
   }
   // At this point everything before ts 5 should be dropped.
   for (int i = 4; i <= 7; i++) {
-    MEDIAPIPE_EXPECT_OK(graph.AddPacketToInputStream(
+    MP_EXPECT_OK(graph.AddPacketToInputStream(
         in_streams[2], MakePacket<int>(i).At(Timestamp(i))));
-    MEDIAPIPE_ASSERT_OK(graph.WaitUntilIdle());
+    MP_ASSERT_OK(graph.WaitUntilIdle());
   }
 
-  MEDIAPIPE_ASSERT_OK(graph.CloseAllInputStreams());
-  MEDIAPIPE_ASSERT_OK(graph.WaitUntilDone());
+  MP_ASSERT_OK(graph.CloseAllInputStreams());
+  MP_ASSERT_OK(graph.WaitUntilDone());
 
   if (GetParam()) {
     EXPECT_THAT(TimestampValues(output_packets[0]),

@@ -82,7 +82,7 @@ class BasePacketProcessor {
 
   // Corrects the given PTS for MPEG PTS rollover. Assumed to be called with
   // the PTS of each frame in decode order. We detect a rollover whenever the
-  // PTS timestamp changes by more than 2^33/2 (half the timstamp space). For
+  // PTS timestamp changes by more than 2^33/2 (half the timestamp space). For
   // video this means every 26.5h with 1 PTS tick = 1/90000 of a second.
   // Example timeline:
   // CorrectPtsForRollover(0) -> 0
@@ -209,6 +209,7 @@ class AudioDecoder {
   ::mediapipe::Status Flush();
 
   std::map<int, int> stream_id_to_audio_options_index_;
+  std::map<int, int> stream_index_to_stream_id_;
   std::map<int, std::unique_ptr<AudioPacketProcessor>> audio_processor_;
 
   // Indexed by container stream index, true if the stream has not seen

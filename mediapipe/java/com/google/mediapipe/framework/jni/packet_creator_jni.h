@@ -31,6 +31,10 @@ JNIEXPORT jlong JNICALL PACKET_CREATOR_METHOD(nativeCreateRgbImage)(
     JNIEnv* env, jobject thiz, jlong context, jobject byte_buffer, jint width,
     jint height);
 
+JNIEXPORT jlong JNICALL PACKET_CREATOR_METHOD(nativeCreateFloatImageFrame)(
+    JNIEnv* env, jobject thiz, jlong context, jobject byte_buffer, jint width,
+    jint height);
+
 JNIEXPORT jlong JNICALL PACKET_CREATOR_METHOD(nativeCreateRgbaImageFrame)(
     JNIEnv* env, jobject thiz, jlong context, jobject byte_buffer, jint width,
     jint height);
@@ -43,8 +47,12 @@ JNIEXPORT jlong JNICALL PACKET_CREATOR_METHOD(nativeCreateGrayscaleImage)(
     JNIEnv* env, jobject thiz, jlong context, jobject byte_buffer, jint width,
     jint height);
 
+JNIEXPORT jlong JNICALL PACKET_CREATOR_METHOD(nativeCreateAudioPacketDirect)(
+    JNIEnv* env, jobject thiz, jlong context, jobject data, jint num_channels,
+    jint num_samples);
+
 JNIEXPORT jlong JNICALL PACKET_CREATOR_METHOD(nativeCreateAudioPacket)(
-    JNIEnv* env, jobject thiz, jlong context, jbyteArray data,
+    JNIEnv* env, jobject thiz, jlong context, jbyteArray data, jint offset,
     jint num_channels, jint num_samples);
 
 JNIEXPORT jlong JNICALL PACKET_CREATOR_METHOD(nativeCreateInt16)(JNIEnv* env,
@@ -104,6 +112,11 @@ JNIEXPORT jlong JNICALL PACKET_CREATOR_METHOD(nativeCreateStringFromByteArray)(
 
 JNIEXPORT jlong JNICALL PACKET_CREATOR_METHOD(nativeCreateCalculatorOptions)(
     JNIEnv* env, jobject thiz, jlong context, jbyteArray data);
+
+JNIEXPORT jlong JNICALL PACKET_CREATOR_METHOD(nativeCreateProto)(JNIEnv* env,
+                                                                 jobject thiz,
+                                                                 jlong context,
+                                                                 jobject data);
 
 JNIEXPORT jlong JNICALL PACKET_CREATOR_METHOD(nativeCreateCameraIntrinsics)(
     JNIEnv* env, jobject thiz, jlong context, jfloat fx, jfloat fy, jfloat cx,

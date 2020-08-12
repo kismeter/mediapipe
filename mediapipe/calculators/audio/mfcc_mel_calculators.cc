@@ -90,8 +90,8 @@ class FramewiseTransformCalculatorBase : public CalculatorBase {
  private:
   // Takes header and options, and sets up state including calling
   // set_num_output_channels() on the base object.
-  virtual ::mediapipe::Status ConfigureTransform(
-      const TimeSeriesHeader& header, const CalculatorOptions& options) = 0;
+  virtual ::mediapipe::Status ConfigureTransform(const TimeSeriesHeader& header,
+                                                 CalculatorContext* cc) = 0;
 
   // Takes a vector<double> corresponding to an input frame, and
   // perform the specific transformation to produce an output frame.
@@ -105,10 +105,10 @@ class FramewiseTransformCalculatorBase : public CalculatorBase {
 ::mediapipe::Status FramewiseTransformCalculatorBase::Open(
     CalculatorContext* cc) {
   TimeSeriesHeader input_header;
-  RETURN_IF_ERROR(time_series_util::FillTimeSeriesHeaderIfValid(
+  MP_RETURN_IF_ERROR(time_series_util::FillTimeSeriesHeaderIfValid(
       cc->Inputs().Index(0).Header(), &input_header));
 
-  ::mediapipe::Status status = ConfigureTransform(input_header, cc->Options());
+  ::mediapipe::Status status = ConfigureTransform(input_header, cc);
 
   auto output_header = new TimeSeriesHeader(input_header);
   output_header->set_num_channels(num_output_channels_);
@@ -175,11 +175,9 @@ class MfccCalculator : public FramewiseTransformCalculatorBase {
   }
 
  private:
-  ::mediapipe::Status ConfigureTransform(
-      const TimeSeriesHeader& header,
-      const CalculatorOptions& options) override {
-    MfccCalculatorOptions mfcc_options;
-    time_series_util::FillOptionsExtensionOrDie(options, &mfcc_options);
+  ::mediapipe::Status ConfigureTransform(const TimeSeriesHeader& header,
+                                         CalculatorContext* cc) override {
+    MfccCalculatorOptions mfcc_options = cc->Options<MfccCalculatorOptions>();
     mfcc_.reset(new audio_dsp::Mfcc());
     int input_length = header.num_channels();
     // Set up the parameters to the Mfcc object.
@@ -235,11 +233,10 @@ class MelSpectrumCalculator : public FramewiseTransformCalculatorBase {
   }
 
  private:
-  ::mediapipe::Status ConfigureTransform(
-      const TimeSeriesHeader& header,
-      const CalculatorOptions& options) override {
-    MelSpectrumCalculatorOptions mel_spectrum_options;
-    time_series_util::FillOptionsExtensionOrDie(options, &mel_spectrum_options);
+  ::mediapipe::Status ConfigureTransform(const TimeSeriesHeader& header,
+                                         CalculatorContext* cc) override {
+    MelSpectrumCalculatorOptions mel_spectrum_options =
+        cc->Options<MelSpectrumCalculatorOptions>();
     mel_filterbank_.reset(new audio_dsp::MelFilterbank());
     int input_length = header.num_channels();
     set_num_output_channels(mel_spectrum_options.channel_count());

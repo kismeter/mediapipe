@@ -61,10 +61,12 @@ class AudioDecoderCalculator : public CalculatorBase {
 ::mediapipe::Status AudioDecoderCalculator::GetContract(
     CalculatorContract* cc) {
   cc->InputSidePackets().Tag("INPUT_FILE_PATH").Set<std::string>();
-
+  if (cc->InputSidePackets().HasTag("OPTIONS")) {
+    cc->InputSidePackets().Tag("OPTIONS").Set<mediapipe::AudioDecoderOptions>();
+  }
   cc->Outputs().Tag("AUDIO").Set<Matrix>();
   if (cc->Outputs().HasTag("AUDIO_HEADER")) {
-    cc->Outputs().Tag("AUDIO_HEADER").Set<mediapipe::TimeSeriesHeader>();
+    cc->Outputs().Tag("AUDIO_HEADER").SetNone();
   }
   return ::mediapipe::OkStatus();
 }
@@ -72,9 +74,11 @@ class AudioDecoderCalculator : public CalculatorBase {
 ::mediapipe::Status AudioDecoderCalculator::Open(CalculatorContext* cc) {
   const std::string& input_file_path =
       cc->InputSidePackets().Tag("INPUT_FILE_PATH").Get<std::string>();
-  const auto& decoder_options = cc->Options<mediapipe::AudioDecoderOptions>();
+  const auto& decoder_options =
+      tool::RetrieveOptions(cc->Options<mediapipe::AudioDecoderOptions>(),
+                            cc->InputSidePackets(), "OPTIONS");
   decoder_ = absl::make_unique<AudioDecoder>();
-  RETURN_IF_ERROR(decoder_->Initialize(input_file_path, decoder_options));
+  MP_RETURN_IF_ERROR(decoder_->Initialize(input_file_path, decoder_options));
   std::unique_ptr<mediapipe::TimeSeriesHeader> header =
       absl::make_unique<mediapipe::TimeSeriesHeader>();
   if (decoder_->FillAudioHeader(decoder_options.audio_stream(0), header.get())

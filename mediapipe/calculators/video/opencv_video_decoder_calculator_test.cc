@@ -41,13 +41,13 @@ TEST(OpenCvVideoDecoderCalculatorTest, TestMp4Avc720pVideo) {
       file::JoinPath("./",
                      "/mediapipe/calculators/video/"
                      "testdata/format_MP4_AVC720P_AAC.video"));
-  MEDIAPIPE_EXPECT_OK(runner.Run());
+  MP_EXPECT_OK(runner.Run());
 
   EXPECT_EQ(runner.Outputs().Tag("VIDEO_PRESTREAM").packets.size(), 1);
-  MEDIAPIPE_EXPECT_OK(runner.Outputs()
-                          .Tag("VIDEO_PRESTREAM")
-                          .packets[0]
-                          .ValidateAsType<VideoHeader>());
+  MP_EXPECT_OK(runner.Outputs()
+                   .Tag("VIDEO_PRESTREAM")
+                   .packets[0]
+                   .ValidateAsType<VideoHeader>());
   const mediapipe::VideoHeader& header =
       runner.Outputs().Tag("VIDEO_PRESTREAM").packets[0].Get<VideoHeader>();
   EXPECT_EQ(ImageFormat::SRGB, header.format);
@@ -55,8 +55,12 @@ TEST(OpenCvVideoDecoderCalculatorTest, TestMp4Avc720pVideo) {
   EXPECT_EQ(640, header.height);
   EXPECT_FLOAT_EQ(6.0f, header.duration);
   EXPECT_FLOAT_EQ(30.0f, header.frame_rate);
-  EXPECT_EQ(180, runner.Outputs().Tag("VIDEO").packets.size());
-  for (int i = 0; i < 180; ++i) {
+  // The number of the output packets should be 180.
+  // Some OpenCV version returns the first two frames with the same timestamp on
+  // macos and we might miss one frame here.
+  int num_of_packets = runner.Outputs().Tag("VIDEO").packets.size();
+  EXPECT_GE(num_of_packets, 179);
+  for (int i = 0; i < num_of_packets; ++i) {
     Packet image_frame_packet = runner.Outputs().Tag("VIDEO").packets[i];
     cv::Mat output_mat =
         formats::MatView(&(image_frame_packet.Get<ImageFrame>()));
@@ -83,13 +87,13 @@ TEST(OpenCvVideoDecoderCalculatorTest, TestFlvH264Video) {
       file::JoinPath("./",
                      "/mediapipe/calculators/video/"
                      "testdata/format_FLV_H264_AAC.video"));
-  MEDIAPIPE_EXPECT_OK(runner.Run());
+  MP_EXPECT_OK(runner.Run());
 
   EXPECT_EQ(runner.Outputs().Tag("VIDEO_PRESTREAM").packets.size(), 1);
-  MEDIAPIPE_EXPECT_OK(runner.Outputs()
-                          .Tag("VIDEO_PRESTREAM")
-                          .packets[0]
-                          .ValidateAsType<VideoHeader>());
+  MP_EXPECT_OK(runner.Outputs()
+                   .Tag("VIDEO_PRESTREAM")
+                   .packets[0]
+                   .ValidateAsType<VideoHeader>());
   const mediapipe::VideoHeader& header =
       runner.Outputs().Tag("VIDEO_PRESTREAM").packets[0].Get<VideoHeader>();
   EXPECT_EQ(ImageFormat::SRGB, header.format);
@@ -127,13 +131,13 @@ TEST(OpenCvVideoDecoderCalculatorTest, TestMkvVp8Video) {
       file::JoinPath("./",
                      "/mediapipe/calculators/video/"
                      "testdata/format_MKV_VP8_VORBIS.video"));
-  MEDIAPIPE_EXPECT_OK(runner.Run());
+  MP_EXPECT_OK(runner.Run());
 
   EXPECT_EQ(runner.Outputs().Tag("VIDEO_PRESTREAM").packets.size(), 1);
-  MEDIAPIPE_EXPECT_OK(runner.Outputs()
-                          .Tag("VIDEO_PRESTREAM")
-                          .packets[0]
-                          .ValidateAsType<VideoHeader>());
+  MP_EXPECT_OK(runner.Outputs()
+                   .Tag("VIDEO_PRESTREAM")
+                   .packets[0]
+                   .ValidateAsType<VideoHeader>());
   const mediapipe::VideoHeader& header =
       runner.Outputs().Tag("VIDEO_PRESTREAM").packets[0].Get<VideoHeader>();
   EXPECT_EQ(ImageFormat::SRGB, header.format);
@@ -141,8 +145,12 @@ TEST(OpenCvVideoDecoderCalculatorTest, TestMkvVp8Video) {
   EXPECT_EQ(320, header.height);
   EXPECT_FLOAT_EQ(6.0f, header.duration);
   EXPECT_FLOAT_EQ(30.0f, header.frame_rate);
-  EXPECT_EQ(180, runner.Outputs().Tag("VIDEO").packets.size());
-  for (int i = 0; i < 180; ++i) {
+  // The number of the output packets should be 180.
+  // Some OpenCV version returns the first two frames with the same timestamp on
+  // macos and we might miss one frame here.
+  int num_of_packets = runner.Outputs().Tag("VIDEO").packets.size();
+  EXPECT_GE(num_of_packets, 179);
+  for (int i = 0; i < num_of_packets; ++i) {
     Packet image_frame_packet = runner.Outputs().Tag("VIDEO").packets[i];
     cv::Mat output_mat =
         formats::MatView(&(image_frame_packet.Get<ImageFrame>()));

@@ -16,7 +16,6 @@ package com.google.mediapipe.framework;
 
 import com.google.common.base.Preconditions;
 import com.google.common.flogger.FluentLogger;
-import com.google.mediapipe.proto.CalculatorOptionsProto.CalculatorOptions;
 import com.google.mediapipe.proto.CalculatorProto.CalculatorGraphConfig;
 import com.google.mediapipe.proto.GraphTemplateProto.CalculatorGraphTemplate;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -36,7 +35,6 @@ public class Graph {
   private long nativeGraphHandle;
   // Hold the references to callbacks.
   private final List<PacketCallback> packetCallbacks = new ArrayList<>();
-  private final List<PacketWithHeaderCallback> packetWithHeaderCallbacks = new ArrayList<>();
   // Side packets used for running the graph.
   private Map<String, Packet> sidePackets = new HashMap<>();
   // Stream headers used for running the graph.
@@ -119,7 +117,7 @@ public class Graph {
   }
 
   /** Specifies options such as template arguments for the graph. */
-  public synchronized void setGraphOptions(CalculatorOptions options) {
+  public synchronized void setGraphOptions(CalculatorGraphConfig.Node options) {
     nativeSetGraphOptions(nativeGraphHandle, options.toByteArray());
   }
 
@@ -155,25 +153,6 @@ public class Graph {
     Preconditions.checkState(!graphRunning && !startRunningGraphCalled);
     packetCallbacks.add(callback);
     nativeAddPacketCallback(nativeGraphHandle, streamName, callback);
-  }
-
-  /**
-   * Adds a {@link PacketWithHeaderCallback} to the context for callback during graph running.
-   *
-   * @param streamName The output stream name in the graph for callback.
-   * @param callback The callback for handling the call when output stream gets a {@link Packet} and
-   *     has a stream header.
-   * @throws MediaPipeException for any error status.
-   */
-  public synchronized void addPacketWithHeaderCallback(
-      String streamName, PacketWithHeaderCallback callback) {
-    Preconditions.checkState(
-        nativeGraphHandle != 0, "Invalid context, tearDown() might have been called.");
-    Preconditions.checkNotNull(streamName);
-    Preconditions.checkNotNull(callback);
-    Preconditions.checkState(!graphRunning && !startRunningGraphCalled);
-    packetWithHeaderCallbacks.add(callback);
-    nativeAddPacketWithHeaderCallback(nativeGraphHandle, streamName, callback);
   }
 
   /**
@@ -465,7 +444,6 @@ public class Graph {
       }
     }
     packetCallbacks.clear();
-    packetWithHeaderCallbacks.clear();
   }
 
   /**
@@ -601,9 +579,6 @@ public class Graph {
 
   private native void nativeAddPacketCallback(
       long context, String streamName, PacketCallback callback);
-
-  private native void nativeAddPacketWithHeaderCallback(
-      long context, String streamName, PacketWithHeaderCallback callback);
 
   private native long nativeAddSurfaceOutput(long context, String streamName);
 

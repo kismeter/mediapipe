@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-licenses(["notice"])  # Apache 2.0
-
-package(default_visibility = ["//visibility:public"])
-
 load("//mediapipe/gpu:metal.bzl", "metal_library")
 load("@build_bazel_rules_apple//apple:ios.bzl", "ios_unit_test")
 load("//mediapipe/framework/port:build_config.bzl", "mediapipe_cc_proto_library")
+
+licenses(["notice"])  # Apache 2.0
+
+package(default_visibility = ["//visibility:public"])
 
 # Disabling GPU support is sometimes useful on desktop Linux because SwiftShader can
 # interfere with desktop GL. b/73494271
@@ -59,7 +59,7 @@ GL_BASE_LINK_OPTS = select({
         # runtime. Weak GLESv3 symbols will still be resolved if we
         # load it early enough.
     ],
-    "//mediapipe:apple": [
+    "//mediapipe:ios": [
         "-framework OpenGLES",
         "-framework CoreVideo",
     ],
@@ -80,8 +80,7 @@ GL_BASE_LINK_OPTS_OSS = GL_BASE_LINK_OPTS + select({
         "-lEGL",
     ],
     "//mediapipe:android": [],
-    "//mediapipe:apple": [],
-    "//mediapipe:macos": [],
+    "//mediapipe:ios": [],
     ":disable_gpu": [],
 })
 
@@ -112,7 +111,7 @@ cc_library(
     # Note: need the frameworks on Apple platforms to get the headers.
     linkopts = select({
         "//conditions:default": [],
-        "//mediapipe:apple": [
+        "//mediapipe:ios": [
             "-framework OpenGLES",
             "-framework CoreVideo",
         ],
@@ -148,7 +147,7 @@ cc_library(
         "//conditions:default": [
             "gl_context_egl.cc",
         ],
-        "//mediapipe:apple": [
+        "//mediapipe:ios": [
             "gl_context_eagl.cc",
         ],
         "//mediapipe:macos": [
@@ -160,7 +159,6 @@ cc_library(
         "//conditions:default": [],
         "//mediapipe:apple": [
             "-x objective-c++",
-            "-std=c++11",
             "-fobjc-arc",
         ],
     }),
@@ -216,7 +214,7 @@ cc_library(
         "//conditions:default": [
             ":gl_texture_buffer",
         ],
-        "//mediapipe:apple": [
+        "//mediapipe:ios": [
             "//mediapipe/objc:CFHolder",
         ],
         "//mediapipe:macos": [
@@ -245,13 +243,17 @@ objc_library(
     srcs = ["pixel_buffer_pool_util.mm"],
     hdrs = ["pixel_buffer_pool_util.h"],
     copts = [
-        "-std=c++11",
         "-Wno-shorten-64-to-32",
     ],
     sdk_frameworks = [
+        "Accelerate",
+        "CoreGraphics",
         "CoreVideo",
     ],
     visibility = ["//visibility:public"],
+    deps = [
+        "//mediapipe/objc:util",
+    ],
 )
 
 objc_library(
@@ -263,7 +265,6 @@ objc_library(
     hdrs = ["MPPGraphGPUData.h"],
     copts = [
         "-x objective-c++",
-        "-std=c++11",
         "-Wno-shorten-64-to-32",
     ],
     sdk_frameworks = [
@@ -288,6 +289,26 @@ objc_library(
         "//mediapipe/framework:calculator_context",
         "//mediapipe/framework/port:ret_check",
         "//mediapipe/gpu:gl_context_options_cc_proto",
+        "@google_toolbox_for_mac//:GTM_Defines",
+    ],
+)
+
+objc_library(
+    name = "MPPMetalUtil",
+    srcs = ["MPPMetalUtil.mm"],
+    hdrs = ["MPPMetalUtil.h"],
+    copts = [
+        "-x objective-c++",
+        "-Wno-shorten-64-to-32",
+    ],
+    sdk_frameworks = [
+        "CoreVideo",
+        "Metal",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//mediapipe/objc:mediapipe_framework_ios",
+        "@com_google_absl//absl/time",
         "@google_toolbox_for_mac//:GTM_Defines",
     ],
 )
@@ -392,7 +413,7 @@ cc_library(
         "//conditions:default": [
             "gl_texture_buffer_pool.cc",
         ],
-        "//mediapipe:apple": [],
+        "//mediapipe:ios": [],
         "//mediapipe:macos": [
             "gl_texture_buffer_pool.cc",
         ],
@@ -401,7 +422,7 @@ cc_library(
         "//conditions:default": [
             "gl_texture_buffer_pool.h",
         ],
-        "//mediapipe:apple": [
+        "//mediapipe:ios": [
             # The inclusions check does not see that this is provided by
             # pixel_buffer_pool_util, so we include it here too. This is
             # b/28066691.
@@ -425,7 +446,7 @@ cc_library(
         "//conditions:default": [
             ":gl_texture_buffer",
         ],
-        "//mediapipe:apple": [
+        "//mediapipe:ios": [
             ":pixel_buffer_pool_util",
             "//mediapipe/objc:CFHolder",
         ],
@@ -502,6 +523,7 @@ cc_library(
         ":gl_base",
         ":gl_context",
         ":gpu_buffer",
+        ":gpu_buffer_format",
         ":gpu_buffer_multi_pool",
         ":gpu_shared_data_internal",
         ":gpu_service",
@@ -541,7 +563,6 @@ objc_library(
     srcs = HELPER_COMMON_SRCS + HELPER_IOS_SRCS,
     hdrs = HELPER_COMMON_HDRS,
     copts = [
-        "-std=c++11",
         "-Wno-shorten-64-to-32",
     ],
     sdk_frameworks = HELPER_IOS_FRAMEWORKS,
@@ -565,7 +586,6 @@ objc_library(
     srcs = ["MPPMetalHelper.mm"],
     hdrs = ["MPPMetalHelper.h"],
     copts = [
-        "-std=c++11",
         "-Wno-shorten-64-to-32",
     ],
     sdk_frameworks = [
@@ -766,10 +786,19 @@ proto_library(
     deps = ["//mediapipe/framework:calculator_proto"],
 )
 
+mediapipe_cc_proto_library(
+    name = "copy_calculator_cc_proto",
+    srcs = ["copy_calculator.proto"],
+    cc_deps = [
+        "//mediapipe/framework:calculator_cc_proto",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [":copy_calculator_proto"],
+)
+
 objc_library(
     name = "metal_copy_calculator",
     srcs = ["MetalCopyCalculator.mm"],
-    copts = ["-std=c++11"],
     sdk_frameworks = [
         "CoreVideo",
         "Metal",
@@ -787,7 +816,6 @@ objc_library(
 objc_library(
     name = "metal_rgb_weight_calculator",
     srcs = ["MetalRgbWeightCalculator.mm"],
-    copts = ["-std=c++11"],
     sdk_frameworks = [
         "CoreVideo",
         "Metal",
@@ -804,7 +832,6 @@ objc_library(
 objc_library(
     name = "metal_sobel_calculator",
     srcs = ["MetalSobelCalculator.mm"],
-    copts = ["-std=c++11"],
     sdk_frameworks = [
         "CoreVideo",
         "Metal",
@@ -821,7 +848,6 @@ objc_library(
 objc_library(
     name = "metal_sobel_compute_calculator",
     srcs = ["MetalSobelComputeCalculator.mm"],
-    copts = ["-std=c++11"],
     sdk_frameworks = [
         "CoreVideo",
         "Metal",
@@ -838,7 +864,6 @@ objc_library(
 objc_library(
     name = "mps_sobel_calculator",
     srcs = ["MPSSobelCalculator.mm"],
-    copts = ["-std=c++11"],
     sdk_frameworks = [
         "CoreVideo",
         "Metal",
@@ -850,19 +875,6 @@ objc_library(
         "//mediapipe/objc:mediapipe_framework_ios",
     ],
     alwayslink = 1,
-)
-
-### Tests
-
-cc_library(
-    name = "gpu_test_base",
-    testonly = 1,
-    hdrs = ["gpu_test_base.h"],
-    deps = [
-        ":gl_calculator_helper",
-        ":gpu_shared_data_internal",
-        "//testing/base/public:gunit_for_library_testonly",
-    ],
 )
 
 MIN_IOS_VERSION = "9.0"  # For thread_local.
@@ -885,7 +897,6 @@ objc_library(
         "gl_ios_test.mm",
     ],
     copts = [
-        "-std=c++11",
         "-Wno-shorten-64-to-32",
     ],
     data = [
@@ -914,6 +925,7 @@ objc_library(
 ios_unit_test(
     name = "gl_ios_test",
     minimum_os_version = MIN_IOS_VERSION,
+    runner = "//googlemac/iPhone/Shared/Testing/EarlGrey/Runner:IOS_LATEST",
     tags = [
         "ios",
     ],

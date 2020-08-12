@@ -34,6 +34,7 @@ namespace mediapipe {
 
 const char kSequenceExampleTag[] = "SEQUENCE_EXAMPLE";
 const char kImageTag[] = "IMAGE";
+const char kFloatContextFeaturePrefixTag[] = "FLOAT_CONTEXT_FEATURE_";
 const char kFloatFeaturePrefixTag[] = "FLOAT_FEATURE_";
 const char kForwardFlowEncodedTag[] = "FORWARD_FLOW_ENCODED";
 const char kBBoxTag[] = "BBOX";
@@ -145,6 +146,9 @@ class PackMediaSequenceCalculator : public CalculatorBase {
         }
         cc->Inputs().Tag(tag).Set<std::vector<Detection>>();
       }
+      if (absl::StartsWith(tag, kFloatContextFeaturePrefixTag)) {
+        cc->Inputs().Tag(tag).Set<std::vector<float>>();
+      }
       if (absl::StartsWith(tag, kFloatFeaturePrefixTag)) {
         cc->Inputs().Tag(tag).Set<std::vector<float>>();
       }
@@ -240,7 +244,7 @@ class PackMediaSequenceCalculator : public CalculatorBase {
   ::mediapipe::Status VerifySequence() {
     std::string error_msg = "Missing features - ";
     bool all_present = true;
-    for (auto iter : features_present_) {
+    for (const auto& iter : features_present_) {
       if (!iter.second) {
         all_present = false;
         absl::StrAppend(&error_msg, iter.first, ", ");
@@ -264,7 +268,7 @@ class PackMediaSequenceCalculator : public CalculatorBase {
     if (options.output_only_if_all_present()) {
       ::mediapipe::Status status = VerifySequence();
       if (!status.ok()) {
-        cc->GetCounter(status.error_message())->Increment();
+        cc->GetCounter(status.ToString())->Increment();
         return status;
       }
     }
@@ -285,6 +289,10 @@ class PackMediaSequenceCalculator : public CalculatorBase {
   }
 
   ::mediapipe::Status Process(CalculatorContext* cc) override {
+    int image_height = -1;
+    int image_width = -1;
+    // Because the tag order may vary, we need to loop through tags to get
+    // image information before processing other tag types.
     for (const auto& tag : cc->Inputs().GetTags()) {
       if (!cc->Inputs().Tag(tag).IsEmpty()) {
         features_present_[tag] = true;
@@ -306,14 +314,21 @@ class PackMediaSequenceCalculator : public CalculatorBase {
           return ::mediapipe::InvalidArgumentErrorBuilder(MEDIAPIPE_LOC)
                  << "No encoded image";
         }
+        image_height = image.height();
+        image_width = image.width();
         mpms::AddImageTimestamp(key, cc->InputTimestamp().Value(),
                                 sequence_.get());
         mpms::AddImageEncoded(key, image.encoded_image(), sequence_.get());
       }
+    }
+    for (const auto& tag : cc->Inputs().GetTags()) {
+      if (!cc->Inputs().Tag(tag).IsEmpty()) {
+        features_present_[tag] = true;
+      }
       if (absl::StartsWith(tag, kKeypointsTag) &&
           !cc->Inputs().Tag(tag).IsEmpty()) {
         std::string key = "";
-        if (tag != kImageTag) {
+        if (tag != kKeypointsTag) {
           int tag_length = sizeof(kKeypointsTag) / sizeof(*kKeypointsTag) - 1;
           if (tag[tag_length] == '_') {
             key = tag.substr(tag_length + 1);
@@ -332,6 +347,17 @@ class PackMediaSequenceCalculator : public CalculatorBase {
           mpms::AddBBoxPoint(mpms::merge_prefix(key, pair.first), pair.second,
                              sequence_.get());
         }
+      }
+      if (absl::StartsWith(tag, kFloatContextFeaturePrefixTag) &&
+          !cc->Inputs().Tag(tag).IsEmpty()) {
+        std::string key =
+            tag.substr(sizeof(kFloatContextFeaturePrefixTag) /
+                           sizeof(*kFloatContextFeaturePrefixTag) -
+                       1);
+        RET_CHECK_EQ(cc->InputTimestamp(), Timestamp::PostStream());
+        mpms::SetContextFeatureFloats(
+            key, cc->Inputs().Tag(tag).Get<std::vector<float>>(),
+            sequence_.get());
       }
       if (absl::StartsWith(tag, kFloatFeaturePrefixTag) &&
           !cc->Inputs().Tag(tag).IsEmpty()) {
@@ -363,11 +389,20 @@ class PackMediaSequenceCalculator : public CalculatorBase {
                   LocationData::BOUNDING_BOX ||
               detection.location_data().format() ==
                   LocationData::RELATIVE_BOUNDING_BOX) {
-            int height = mpms::GetImageHeight(*sequence_);
-            int width = mpms::GetImageWidth(*sequence_);
+            if (mpms::HasImageHeight(*sequence_) &&
+                mpms::HasImageWidth(*sequence_)) {
+              image_height = mpms::GetImageHeight(*sequence_);
+              image_width = mpms::GetImageWidth(*sequence_);
+            }
+            if (image_height == -1 || image_width == -1) {
+              return ::mediapipe::InvalidArgumentErrorBuilder(MEDIAPIPE_LOC)
+                     << "Images must be provided with bounding boxes or the "
+                        "image "
+                     << "height and width must already be in the example.";
+            }
             Location relative_bbox = Location::CreateRelativeBBoxLocation(
                 Location(detection.location_data())
-                    .ConvertToRelativeBBox(width, height));
+                    .ConvertToRelativeBBox(image_width, image_height));
             predicted_locations.push_back(relative_bbox);
             if (detection.label_size() > 0) {
               predicted_class_strings.push_back(detection.label(0));

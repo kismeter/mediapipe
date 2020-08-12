@@ -128,8 +128,8 @@ class NodeChainSubgraph : public Subgraph {
  public:
   ::mediapipe::StatusOr<CalculatorGraphConfig> GetConfig(
       const SubgraphOptions& options) override {
-    const mediapipe::NodeChainSubgraphOptions& opts =
-        options.GetExtension(mediapipe::NodeChainSubgraphOptions::ext);
+    auto opts =
+        Subgraph::GetOptions<mediapipe::NodeChainSubgraphOptions>(options);
     const ProtoString& node_type = opts.node_type();
     int chain_length = opts.chain_length();
     RET_CHECK(!node_type.empty());
@@ -213,7 +213,7 @@ TEST(SubgraphExpansionTest, TransformStreamNames) {
         }
       )");
   auto add_foo = [](absl::string_view s) { return absl::StrCat(s, "_foo"); };
-  MEDIAPIPE_EXPECT_OK(tool::TransformStreamNames(
+  MP_EXPECT_OK(tool::TransformStreamNames(
       (*config.mutable_node())[0].mutable_input_stream(), add_foo));
   EXPECT_THAT(config, mediapipe::EqualsProto(expected_config));
 }
@@ -250,6 +250,7 @@ TEST(SubgraphExpansionTest, TransformNames) {
           output_stream: "__sg0_output_1"
         }
         node {
+          name: "__sg0_SomeRegularCalculator"
           calculator: "SomeRegularCalculator"
           input_stream: "__sg0_output_1"
           output_stream: "__sg0_output_2"
@@ -258,7 +259,7 @@ TEST(SubgraphExpansionTest, TransformNames) {
   auto add_prefix = [](absl::string_view s) {
     return absl::StrCat("__sg0_", s);
   };
-  MEDIAPIPE_EXPECT_OK(tool::TransformNames(&config, add_prefix));
+  MP_EXPECT_OK(tool::TransformNames(&config, add_prefix));
   EXPECT_THAT(config, mediapipe::EqualsProto(expected_config));
 }
 
@@ -281,7 +282,7 @@ TEST(SubgraphExpansionTest, FindCorrespondingStreams) {
         }
       )");
   std::map<std::string, std::string> stream_map;
-  MEDIAPIPE_EXPECT_OK(tool::FindCorrespondingStreams(
+  MP_EXPECT_OK(tool::FindCorrespondingStreams(
       &stream_map, config1.input_stream(), config2.node()[0].input_stream()));
   EXPECT_THAT(stream_map,
               testing::UnorderedElementsAre(testing::Pair("input_1", "foo"),
@@ -416,8 +417,7 @@ TEST(SubgraphExpansionTest, ConnectSubgraphStreams) {
           output_side_packet: "flop"
         }
       )");
-  MEDIAPIPE_EXPECT_OK(
-      tool::ConnectSubgraphStreams(supergraph.node()[0], &subgraph));
+  MP_EXPECT_OK(tool::ConnectSubgraphStreams(supergraph.node()[0], &subgraph));
   EXPECT_THAT(subgraph, mediapipe::EqualsProto(expected_subgraph));
 }
 
@@ -439,23 +439,23 @@ TEST(SubgraphExpansionTest, ExpandSubgraphs) {
           output_stream: "foo"
         }
         node {
-          name: "__sg0_regular_node"
+          name: "testsubgraph__regular_node"
           calculator: "SomeRegularCalculator"
           input_stream: "foo"
-          output_stream: "__sg0_stream_a"
-          input_side_packet: "__sg0_side"
+          output_stream: "testsubgraph__stream_a"
+          input_side_packet: "testsubgraph__side"
         }
         node {
-          name: "__sg0_simple_sink"
+          name: "testsubgraph__simple_sink"
           calculator: "SomeSinkCalculator"
-          input_stream: "__sg0_stream_a"
+          input_stream: "testsubgraph__stream_a"
         }
         packet_generator {
           packet_generator: "SomePacketGenerator"
-          output_side_packet: "__sg0_side"
+          output_side_packet: "testsubgraph__side"
         }
       )");
-  MEDIAPIPE_EXPECT_OK(tool::ExpandSubgraphs(&supergraph));
+  MP_EXPECT_OK(tool::ExpandSubgraphs(&supergraph));
   EXPECT_THAT(supergraph, mediapipe::EqualsProto(expected_graph));
 }
 
@@ -504,24 +504,25 @@ TEST(SubgraphExpansionTest, ExecutorFieldOfNodeInSubgraphPreserved) {
           output_stream: "OUT:output"
         }
       )");
-  CalculatorGraphConfig expected_graph =
-      ::mediapipe::ParseTextProtoOrDie<CalculatorGraphConfig>(R"(
-        input_stream: "input"
-        executor {
-          name: "custom_thread_pool"
-          type: "ThreadPoolExecutor"
-          options {
-            [mediapipe.ThreadPoolExecutorOptions.ext] { num_threads: 4 }
-          }
-        }
-        node {
-          calculator: "PassThroughCalculator"
-          input_stream: "input"
-          output_stream: "output"
-          executor: "custom_thread_pool"
-        }
-      )");
-  MEDIAPIPE_EXPECT_OK(tool::ExpandSubgraphs(&supergraph));
+  CalculatorGraphConfig expected_graph = ::mediapipe::ParseTextProtoOrDie<
+      CalculatorGraphConfig>(R"(
+    input_stream: "input"
+    executor {
+      name: "custom_thread_pool"
+      type: "ThreadPoolExecutor"
+      options {
+        [mediapipe.ThreadPoolExecutorOptions.ext] { num_threads: 4 }
+      }
+    }
+    node {
+      calculator: "PassThroughCalculator"
+      name: "enclosingsubgraph__nodewithexecutorsubgraph__PassThroughCalculator"
+      input_stream: "input"
+      output_stream: "output"
+      executor: "custom_thread_pool"
+    }
+  )");
+  MP_EXPECT_OK(tool::ExpandSubgraphs(&supergraph));
   EXPECT_THAT(supergraph, mediapipe::EqualsProto(expected_graph));
 }
 

@@ -39,6 +39,7 @@ namespace mediapipe {
 //   ROTATION: the counterclockwise rotation angle in degrees. This allows
 //   user to specify different rotation angles for different frames. If this
 //   stream is provided, it will override the ROTATION input side packet.
+//   OUTPUT_DIMENSIONS: the output width and height in pixels.
 // Additional output streams:
 //   TOP_BOTTOM_PADDING: If use FIT scale mode, this stream outputs the padding
 //   size of the input image in normalized value [0, 1] for top and bottom
@@ -83,6 +84,7 @@ class GlScalerCalculator : public CalculatorBase {
   GlCalculatorHelper helper_;
   int dst_width_ = 0;
   int dst_height_ = 0;
+  float dst_scale_ = -1.f;
   FrameRotation rotation_;
   std::unique_ptr<QuadRenderer> rgb_renderer_;
   std::unique_ptr<QuadRenderer> yuv_renderer_;
@@ -102,7 +104,10 @@ REGISTER_CALCULATOR(GlScalerCalculator);
   if (cc->Inputs().HasTag("ROTATION")) {
     cc->Inputs().Tag("ROTATION").Set<int>();
   }
-  RETURN_IF_ERROR(GlCalculatorHelper::UpdateContract(cc));
+  if (cc->Inputs().HasTag("OUTPUT_DIMENSIONS")) {
+    cc->Inputs().Tag("OUTPUT_DIMENSIONS").Set<DimensionsPacketType>();
+  }
+  MP_RETURN_IF_ERROR(GlCalculatorHelper::UpdateContract(cc));
 
   if (cc->InputSidePackets().HasTag("OPTIONS")) {
     cc->InputSidePackets().Tag("OPTIONS").Set<GlScalerCalculatorOptions>();
@@ -130,7 +135,7 @@ REGISTER_CALCULATOR(GlScalerCalculator);
   cc->SetOffset(mediapipe::TimestampDiff(0));
 
   // Let the helper access the GL context information.
-  RETURN_IF_ERROR(helper_.Open(cc));
+  MP_RETURN_IF_ERROR(helper_.Open(cc));
 
   int rotation_ccw = 0;
   const auto& options =
@@ -141,6 +146,9 @@ REGISTER_CALCULATOR(GlScalerCalculator);
   }
   if (options.has_output_height()) {
     dst_height_ = options.output_height();
+  }
+  if (options.has_output_scale()) {
+    dst_scale_ = options.output_scale();
   }
   if (options.has_rotation()) {
     rotation_ccw = options.rotation();
@@ -171,12 +179,24 @@ REGISTER_CALCULATOR(GlScalerCalculator);
     rotation_ccw = cc->InputSidePackets().Tag("ROTATION").Get<int>();
   }
 
-  RETURN_IF_ERROR(FrameRotationFromInt(&rotation_, rotation_ccw));
+  MP_RETURN_IF_ERROR(FrameRotationFromInt(&rotation_, rotation_ccw));
 
   return ::mediapipe::OkStatus();
 }
 
 ::mediapipe::Status GlScalerCalculator::Process(CalculatorContext* cc) {
+  if (cc->Inputs().HasTag("OUTPUT_DIMENSIONS")) {
+    if (cc->Inputs().Tag("OUTPUT_DIMENSIONS").IsEmpty()) {
+      // OUTPUT_DIMENSIONS input stream is specified, but value is missing.
+      return ::mediapipe::OkStatus();
+    }
+
+    const auto& dimensions =
+        cc->Inputs().Tag("OUTPUT_DIMENSIONS").Get<DimensionsPacketType>();
+    dst_width_ = dimensions[0];
+    dst_height_ = dimensions[1];
+  }
+
   return helper_.RunInGlContext([this, cc]() -> ::mediapipe::Status {
     const auto& input = TagOrIndex(cc->Inputs(), "VIDEO", 0).Get<GpuBuffer>();
     QuadRenderer* renderer = nullptr;
@@ -188,30 +208,30 @@ REGISTER_CALCULATOR(GlScalerCalculator);
         input.format() == GpuBufferFormat::kBiPlanar420YpCbCr8FullRange) {
       if (!yuv_renderer_) {
         yuv_renderer_ = absl::make_unique<QuadRenderer>();
-        RETURN_IF_ERROR(yuv_renderer_->GlSetup(
+        MP_RETURN_IF_ERROR(yuv_renderer_->GlSetup(
             kYUV2TexToRGBFragmentShader, {"video_frame_y", "video_frame_uv"}));
       }
       renderer = yuv_renderer_.get();
       src1 = helper_.CreateSourceTexture(input, 0);
       src2 = helper_.CreateSourceTexture(input, 1);
     } else  // NOLINT(readability/braces)
-#endif      // __APPLE__
+#endif  // __APPLE__
     {
       src1 = helper_.CreateSourceTexture(input);
 #ifdef __ANDROID__
       if (src1.target() == GL_TEXTURE_EXTERNAL_OES) {
         if (!ext_rgb_renderer_) {
           ext_rgb_renderer_ = absl::make_unique<QuadRenderer>();
-          RETURN_IF_ERROR(ext_rgb_renderer_->GlSetup(
+          MP_RETURN_IF_ERROR(ext_rgb_renderer_->GlSetup(
               kBasicTexturedFragmentShaderOES, {"video_frame"}));
         }
         renderer = ext_rgb_renderer_.get();
       } else  // NOLINT(readability/braces)
-#endif        // __ANDROID__
+#endif  // __ANDROID__
       {
         if (!rgb_renderer_) {
           rgb_renderer_ = absl::make_unique<QuadRenderer>();
-          RETURN_IF_ERROR(rgb_renderer_->GlSetup());
+          MP_RETURN_IF_ERROR(rgb_renderer_->GlSetup());
         }
         renderer = rgb_renderer_.get();
       }
@@ -221,7 +241,7 @@ REGISTER_CALCULATOR(GlScalerCalculator);
     // Override input side packet if ROTATION input packet is provided.
     if (cc->Inputs().HasTag("ROTATION")) {
       int rotation_ccw = cc->Inputs().Tag("ROTATION").Get<int>();
-      RETURN_IF_ERROR(FrameRotationFromInt(&rotation_, rotation_ccw));
+      MP_RETURN_IF_ERROR(FrameRotationFromInt(&rotation_, rotation_ccw));
     }
 
     int dst_width;
@@ -255,7 +275,7 @@ REGISTER_CALCULATOR(GlScalerCalculator);
       glBindTexture(src2.target(), src2.name());
     }
 
-    RETURN_IF_ERROR(renderer->GlRender(
+    MP_RETURN_IF_ERROR(renderer->GlRender(
         src1.width(), src1.height(), dst.width(), dst.height(), scale_mode_,
         rotation_, horizontal_flip_output_, vertical_flip_output_,
         /*flip_texture*/ false));
@@ -283,8 +303,18 @@ void GlScalerCalculator::GetOutputDimensions(int src_width, int src_height,
   if (dst_width_ > 0 && dst_height_ > 0) {
     *dst_width = dst_width_;
     *dst_height = dst_height_;
-  } else if (rotation_ == FrameRotation::k90 ||
-             rotation_ == FrameRotation::k270) {
+    return;
+  }
+  if (dst_scale_ > 0) {
+    // Scales the destination size, but just uses src size as a temporary for
+    // calculations.
+    src_width = static_cast<int>(src_width * dst_scale_);
+    src_height = static_cast<int>(src_height * dst_scale_);
+    // Round to nearest multiply of 4 for better memory alignment.
+    src_width = ((src_width + 2) >> 2) << 2;
+    src_height = ((src_height + 2) >> 2) << 2;
+  }
+  if (rotation_ == FrameRotation::k90 || rotation_ == FrameRotation::k270) {
     *dst_width = src_height;
     *dst_height = src_width;
   } else {

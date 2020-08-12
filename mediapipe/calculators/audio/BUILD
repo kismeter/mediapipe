@@ -68,6 +68,23 @@ mediapipe_cc_proto_library(
 )
 
 proto_library(
+    name = "stabilized_log_calculator_proto",
+    srcs = ["stabilized_log_calculator.proto"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//mediapipe/framework:calculator_proto",
+    ],
+)
+
+mediapipe_cc_proto_library(
+    name = "stabilized_log_calculator_cc_proto",
+    srcs = ["stabilized_log_calculator.proto"],
+    cc_deps = ["//mediapipe/framework:calculator_cc_proto"],
+    visibility = ["//visibility:public"],
+    deps = [":stabilized_log_calculator_proto"],
+)
+
+proto_library(
     name = "time_series_framer_calculator_proto",
     srcs = ["time_series_framer_calculator.proto"],
     visibility = ["//visibility:public"],
@@ -152,6 +169,22 @@ cc_library(
         "@com_google_audio_tools//audio/dsp:resampler",
         "@com_google_audio_tools//audio/dsp:resampler_rational_factor",
         "@eigen_archive//:eigen",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "stabilized_log_calculator",
+    srcs = ["stabilized_log_calculator.cc"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":stabilized_log_calculator_cc_proto",
+        "//mediapipe/framework:calculator_framework",
+        "//mediapipe/framework/formats:matrix",
+        "//mediapipe/framework/formats:time_series_header_cc_proto",
+        "//mediapipe/framework/port:core_proto",
+        "//mediapipe/framework/port:status",
+        "//mediapipe/util:time_series_util",
     ],
     alwayslink = 1,
 )
@@ -262,6 +295,24 @@ cc_test(
         "//mediapipe/framework/port:status",
         "//mediapipe/util:time_series_test_util",
         "@com_google_audio_tools//audio/dsp:number_util",
+        "@eigen_archive//:eigen",
+    ],
+)
+
+cc_test(
+    name = "stabilized_log_calculator_test",
+    srcs = ["stabilized_log_calculator_test.cc"],
+    deps = [
+        ":stabilized_log_calculator",
+        ":stabilized_log_calculator_cc_proto",
+        "//mediapipe/framework:calculator_framework",
+        "//mediapipe/framework:calculator_runner",
+        "//mediapipe/framework/formats:matrix",
+        "//mediapipe/framework/formats:time_series_header_cc_proto",
+        "//mediapipe/framework/port:gtest_main",
+        "//mediapipe/framework/port:integral_types",
+        "//mediapipe/framework/port:status",
+        "//mediapipe/util:time_series_test_util",
         "@eigen_archive//:eigen",
     ],
 )

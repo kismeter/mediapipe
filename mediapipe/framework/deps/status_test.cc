@@ -21,9 +21,9 @@ namespace mediapipe {
 
 TEST(Status, OK) {
   EXPECT_EQ(OkStatus().code(), ::mediapipe::StatusCode::kOk);
-  EXPECT_EQ(OkStatus().error_message(), "");
-  MEDIAPIPE_EXPECT_OK(OkStatus());
-  MEDIAPIPE_ASSERT_OK(OkStatus());
+  EXPECT_EQ(OkStatus().message(), "");
+  MP_EXPECT_OK(OkStatus());
+  MP_ASSERT_OK(OkStatus());
   EXPECT_EQ(OkStatus(), Status());
   Status s;
   EXPECT_TRUE(s.ok());
@@ -38,7 +38,7 @@ TEST(Status, Set) {
   Status status;
   status = Status(::mediapipe::StatusCode::kCancelled, "Error message");
   EXPECT_EQ(status.code(), ::mediapipe::StatusCode::kCancelled);
-  EXPECT_EQ(status.error_message(), "Error message");
+  EXPECT_EQ(status.message(), "Error message");
 }
 
 TEST(Status, Copy) {

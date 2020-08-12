@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "absl/strings/substitute.h"
+#include "absl/strings/str_replace.h"
 #include "mediapipe/calculators/tensorflow/tensorflow_session.h"
 #include "mediapipe/calculators/tensorflow/tensorflow_session_from_saved_model_calculator.pb.h"
 #include "mediapipe/framework/calculator.pb.h"
@@ -26,6 +26,7 @@
 #include "mediapipe/framework/port/status_matchers.h"
 #include "mediapipe/framework/tool/tag_map_helper.h"
 #include "mediapipe/framework/tool/validate_type.h"
+#include "tensorflow/core/framework/device_attributes.pb.h"
 
 namespace mediapipe {
 
@@ -75,7 +76,7 @@ TEST_F(TensorFlowSessionFromSavedModelCalculatorTest,
           }
         })",
                                            options_->DebugString()));
-  MEDIAPIPE_ASSERT_OK(runner.Run());
+  MP_ASSERT_OK(runner.Run());
   const TensorFlowSession& session =
       runner.OutputSidePackets().Tag("SESSION").Get<TensorFlowSession>();
   // Session must be set.
@@ -119,7 +120,7 @@ TEST_F(TensorFlowSessionFromSavedModelCalculatorTest,
                                            options_->DebugString()));
   runner.MutableSidePackets()->Tag("STRING_SAVED_MODEL_PATH") =
       MakePacket<std::string>(GetSavedModelDir());
-  MEDIAPIPE_ASSERT_OK(runner.Run());
+  MP_ASSERT_OK(runner.Run());
   const TensorFlowSession& session =
       runner.OutputSidePackets().Tag("SESSION").Get<TensorFlowSession>();
   // Session must be set.
@@ -159,17 +160,17 @@ TEST_F(TensorFlowSessionFromSavedModelCalculatorTest,
                            options_->DebugString()));
 
   CalculatorGraph graph;
-  MEDIAPIPE_ASSERT_OK(graph.Initialize(graph_config));
+  MP_ASSERT_OK(graph.Initialize(graph_config));
   StatusOrPoller status_or_poller =
       graph.AddOutputStreamPoller("multiplied_tensor");
   ASSERT_TRUE(status_or_poller.ok());
   OutputStreamPoller poller = std::move(status_or_poller.ValueOrDie());
 
-  MEDIAPIPE_ASSERT_OK(graph.StartRun({}));
-  MEDIAPIPE_ASSERT_OK(graph.AddPacketToInputStream(
+  MP_ASSERT_OK(graph.StartRun({}));
+  MP_ASSERT_OK(graph.AddPacketToInputStream(
       "a_tensor",
       Adopt(new auto(TensorMatrix1x3(1, -1, 10))).At(Timestamp(0))));
-  MEDIAPIPE_ASSERT_OK(graph.CloseInputStream("a_tensor"));
+  MP_ASSERT_OK(graph.CloseInputStream("a_tensor"));
 
   Packet packet;
   ASSERT_TRUE(poller.Next(&packet));
@@ -179,7 +180,7 @@ TEST_F(TensorFlowSessionFromSavedModelCalculatorTest,
             packet.Get<tf::Tensor>().DebugString());
 
   ASSERT_FALSE(poller.Next(&packet));
-  MEDIAPIPE_ASSERT_OK(graph.WaitUntilDone());
+  MP_ASSERT_OK(graph.WaitUntilDone());
 }
 
 TEST_F(TensorFlowSessionFromSavedModelCalculatorTest,
@@ -197,11 +198,37 @@ TEST_F(TensorFlowSessionFromSavedModelCalculatorTest,
           }
         })",
                                            options_->DebugString()));
-  MEDIAPIPE_ASSERT_OK(runner.Run());
+  MP_ASSERT_OK(runner.Run());
   const TensorFlowSession& session =
       runner.OutputSidePackets().Tag("SESSION").Get<TensorFlowSession>();
   // Session must be set.
   ASSERT_NE(session.session, nullptr);
+}
+
+TEST_F(TensorFlowSessionFromSavedModelCalculatorTest,
+       ConfiguresSessionGivenConfig) {
+  options_->set_saved_model_path(
+      std::string(file::SplitPath(GetSavedModelDir()).first));
+  options_->set_load_latest_model(true);
+  options_->mutable_session_config()->mutable_device_count()->insert(
+      {"CPU", 10});
+  CalculatorRunner runner(absl::Substitute(R"(
+        calculator: "TensorFlowSessionFromSavedModelCalculator"
+        output_side_packet: "SESSION:tf_model"
+        options {
+          [mediapipe.TensorFlowSessionFromSavedModelCalculatorOptions.ext]: {
+            $0
+          }
+        })",
+                                           options_->DebugString()));
+  MP_ASSERT_OK(runner.Run());
+  const TensorFlowSession& session =
+      runner.OutputSidePackets().Tag("SESSION").Get<TensorFlowSession>();
+  // Session must be set.
+  ASSERT_NE(session.session, nullptr);
+  std::vector<tensorflow::DeviceAttributes> devices;
+  ASSERT_EQ(session.session->ListDevices(&devices), tensorflow::Status::OK());
+  EXPECT_THAT(devices.size(), 10);
 }
 
 }  // namespace

@@ -71,10 +71,8 @@ class SpectrogramCalculator : public CalculatorBase {
         // Input stream with TimeSeriesHeader.
     );
 
-    SpectrogramCalculatorOptions spectrogram_options;
-    time_series_util::FillOptionsExtensionOrDie(cc->Options(),
-                                                &spectrogram_options);
-
+    SpectrogramCalculatorOptions spectrogram_options =
+        cc->Options<SpectrogramCalculatorOptions>();
     if (!spectrogram_options.allow_multichannel_input()) {
       if (spectrogram_options.output_type() ==
           SpectrogramCalculatorOptions::COMPLEX) {
@@ -115,8 +113,15 @@ class SpectrogramCalculator : public CalculatorBase {
   ::mediapipe::Status Close(CalculatorContext* cc) override;
 
  private:
-  Timestamp CurrentOutputTimestamp() {
-    // Current output timestamp is the *center* of the next frame to be
+  Timestamp CurrentOutputTimestamp(CalculatorContext* cc) {
+    if (use_local_timestamp_) {
+      return cc->InputTimestamp();
+    }
+    return CumulativeOutputTimestamp();
+  }
+
+  Timestamp CumulativeOutputTimestamp() {
+    // Cumulative output timestamp is the *center* of the next frame to be
     // emitted, hence delayed by half a window duration compared to relevant
     // input timestamp.
     return initial_input_timestamp_ +
@@ -143,6 +148,7 @@ class SpectrogramCalculator : public CalculatorBase {
       const OutputMatrixType postprocess_output_fn(const OutputMatrixType&),
       CalculatorContext* cc);
 
+  bool use_local_timestamp_;
   double input_sample_rate_;
   bool pad_final_packet_;
   int frame_duration_samples_;
@@ -172,32 +178,24 @@ REGISTER_CALCULATOR(SpectrogramCalculator);
 const float SpectrogramCalculator::kLnPowerToDb = 4.342944819032518;
 
 ::mediapipe::Status SpectrogramCalculator::Open(CalculatorContext* cc) {
-  SpectrogramCalculatorOptions spectrogram_options;
-  time_series_util::FillOptionsExtensionOrDie(cc->Options(),
-                                              &spectrogram_options);
+  SpectrogramCalculatorOptions spectrogram_options =
+      cc->Options<SpectrogramCalculatorOptions>();
+
+  use_local_timestamp_ = spectrogram_options.use_local_timestamp();
 
   if (spectrogram_options.frame_duration_seconds() <= 0.0) {
-    ::mediapipe::InvalidArgumentErrorBuilder(MEDIAPIPE_LOC)
-        << "Invalid or missing frame_duration_seconds.\n"
-           "frame_duration_seconds: "
-        << spectrogram_options.frame_overlap_seconds();
+    // TODO: return an error.
   }
   if (spectrogram_options.frame_overlap_seconds() >=
       spectrogram_options.frame_duration_seconds()) {
-    ::mediapipe::InvalidArgumentErrorBuilder(MEDIAPIPE_LOC)
-        << "Invalid frame_overlap_seconds.\nframe_overlap_seconds: "
-        << spectrogram_options.frame_overlap_seconds()
-        << "\nframe_duration_seconds: "
-        << spectrogram_options.frame_duration_seconds();
+    // TODO: return an error.
   }
   if (spectrogram_options.frame_overlap_seconds() < 0.0) {
-    ::mediapipe::InvalidArgumentErrorBuilder(MEDIAPIPE_LOC)
-        << "Frame_overlap_seconds is < 0.0.\nframe_overlap_seconds: "
-        << spectrogram_options.frame_overlap_seconds();
+    // TODO: return an error.
   }
 
   TimeSeriesHeader input_header;
-  RETURN_IF_ERROR(time_series_util::FillTimeSeriesHeaderIfValid(
+  MP_RETURN_IF_ERROR(time_series_util::FillTimeSeriesHeaderIfValid(
       cc->Inputs().Index(0).Header(), &input_header));
 
   input_sample_rate_ = input_header.sample_rate();
@@ -205,9 +203,7 @@ const float SpectrogramCalculator::kLnPowerToDb = 4.342944819032518;
 
   if (!spectrogram_options.allow_multichannel_input() &&
       num_input_channels_ != 1) {
-    ::mediapipe::InvalidArgumentErrorBuilder(MEDIAPIPE_LOC)
-        << "The current setting only supports single-channel input. Please set "
-           "allow_multichannel_input.\n";
+    // TODO: return an error.
   }
 
   frame_duration_samples_ =
@@ -223,6 +219,10 @@ const float SpectrogramCalculator::kLnPowerToDb = 4.342944819032518;
 
   std::vector<double> window;
   switch (spectrogram_options.window_type()) {
+    case SpectrogramCalculatorOptions::COSINE:
+      audio_dsp::CosineWindow().GetPeriodicSamples(frame_duration_samples_,
+                                                   &window);
+      break;
     case SpectrogramCalculatorOptions::HANN:
       audio_dsp::HannWindow().GetPeriodicSamples(frame_duration_samples_,
                                                  &window);
@@ -282,10 +282,7 @@ const float SpectrogramCalculator::kLnPowerToDb = 4.342944819032518;
 
   const Matrix& input_stream = cc->Inputs().Index(0).Get<Matrix>();
   if (input_stream.rows() != num_input_channels_) {
-    ::mediapipe::InvalidArgumentErrorBuilder(MEDIAPIPE_LOC)
-        << "Number of input channels do not correspond to the number of rows "
-        << "in the input matrix: " << num_input_channels_ << "channels vs "
-        << input_stream.rows() << " rows";
+    // TODO: return an error.
   }
 
   cumulative_input_samples_ += input_stream.cols();
@@ -350,11 +347,11 @@ template <class OutputMatrixType>
         << "Inconsistent number of spectrogram channels.";
     if (allow_multichannel_input_) {
       cc->Outputs().Index(0).Add(spectrogram_matrices.release(),
-                                 CurrentOutputTimestamp());
+                                 CurrentOutputTimestamp(cc));
     } else {
       cc->Outputs().Index(0).Add(
           new OutputMatrixType(spectrogram_matrices->at(0)),
-          CurrentOutputTimestamp());
+          CurrentOutputTimestamp(cc));
     }
     cumulative_completed_frames_ += output_vectors.size();
   }

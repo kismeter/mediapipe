@@ -20,7 +20,7 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 from mediapipe.util.sequence import media_sequence as ms
 
 
@@ -59,6 +59,7 @@ class MediaSequenceTest(tf.test.TestCase):
     ms.set_image_height(47, example)
     ms.set_image_width(47, example)
     ms.set_image_frame_rate(0.47, example)
+    ms.set_image_data_path(b"test", example)
     ms.set_forward_flow_format(b"test", example)
     ms.set_forward_flow_channels(47, example)
     ms.set_forward_flow_colorspace(b"test", example)
@@ -74,10 +75,13 @@ class MediaSequenceTest(tf.test.TestCase):
     ms.set_instance_segmentation_height(47, example)
     ms.set_instance_segmentation_width(47, example)
     ms.set_instance_segmentation_object_class_index((47, 49), example)
+    ms.set_bbox_parts((b"HEAD", b"TOE"), example)
     # feature lists
     ms.add_image_encoded(b"test", example)
+    ms.add_image_multi_encoded([b"test", b"test"], example)
     ms.add_image_timestamp(47, example)
     ms.add_forward_flow_encoded(b"test", example)
+    ms.add_forward_flow_multi_encoded([b"test", b"test"], example)
     ms.add_forward_flow_timestamp(47, example)
     ms.add_bbox_ymin((0.47, 0.49), example)
     ms.add_bbox_xmin((0.47, 0.49), example)
@@ -85,6 +89,9 @@ class MediaSequenceTest(tf.test.TestCase):
     ms.add_bbox_xmax((0.47, 0.49), example)
     ms.add_bbox_point_x((0.47, 0.49), example)
     ms.add_bbox_point_y((0.47, 0.49), example)
+    ms.add_bbox_3d_point_x((0.47, 0.49), example)
+    ms.add_bbox_3d_point_y((0.47, 0.49), example)
+    ms.add_bbox_3d_point_z((0.47, 0.49), example)
     ms.add_predicted_bbox_ymin((0.47, 0.49), example)
     ms.add_predicted_bbox_xmin((0.47, 0.49), example)
     ms.add_predicted_bbox_ymax((0.47, 0.49), example)
@@ -107,7 +114,9 @@ class MediaSequenceTest(tf.test.TestCase):
     ms.add_predicted_bbox_class_string((b"test", b"strings"), example)
     ms.add_predicted_bbox_timestamp(47, example)
     ms.add_class_segmentation_encoded(b"test", example)
+    ms.add_class_segmentation_multi_encoded([b"test", b"test"], example)
     ms.add_instance_segmentation_encoded(b"test", example)
+    ms.add_instance_segmentation_multi_encoded([b"test", b"test"], example)
     ms.add_class_segmentation_timestamp(47, example)
     ms.set_bbox_embedding_dimensions_per_region((47, 49), example)
     ms.set_bbox_embedding_format(b"test", example)
@@ -126,6 +135,30 @@ class MediaSequenceTest(tf.test.TestCase):
     self.assertTrue(ms.has_bbox(example))
     ms.clear_bbox(example)
     self.assertEqual(0, ms.get_bbox_size(example))
+
+  def test_point_round_trip(self):
+    example = tf.train.SequenceExample()
+    points = np.array([[0.1, 0.2],
+                       [0.5, 0.6]])
+    ms.add_bbox_point(points, example)
+    ms.add_bbox_point(points, example)
+    self.assertEqual(2, ms.get_bbox_point_size(example))
+    self.assertAllClose(points, ms.get_bbox_point_at(0, example))
+    self.assertTrue(ms.has_bbox_point(example))
+    ms.clear_bbox_point(example)
+    self.assertEqual(0, ms.get_bbox_point_size(example))
+
+  def test_3d_point_round_trip(self):
+    example = tf.train.SequenceExample()
+    points = np.array([[0.1, 0.2, 0.3],
+                       [0.5, 0.6, 0.7]])
+    ms.add_bbox_3d_point(points, example)
+    ms.add_bbox_3d_point(points, example)
+    self.assertEqual(2, ms.get_bbox_3d_point_size(example))
+    self.assertAllClose(points, ms.get_bbox_3d_point_at(0, example))
+    self.assertTrue(ms.has_bbox_3d_point(example))
+    ms.clear_bbox_3d_point(example)
+    self.assertEqual(0, ms.get_bbox_3d_point_size(example))
 
   def test_predicted_bbox_round_trip(self):
     example = tf.train.SequenceExample()

@@ -64,8 +64,8 @@ void CopyVectorToChannel(const std::vector<float>& vec, Matrix* matrix,
 
 ::mediapipe::Status RationalFactorResampleCalculator::Open(
     CalculatorContext* cc) {
-  RationalFactorResampleCalculatorOptions resample_options;
-  time_series_util::FillOptionsExtensionOrDie(cc->Options(), &resample_options);
+  RationalFactorResampleCalculatorOptions resample_options =
+      cc->Options<RationalFactorResampleCalculatorOptions>();
 
   if (!resample_options.has_target_sample_rate()) {
     return tool::StatusInvalid(
@@ -74,7 +74,7 @@ void CopyVectorToChannel(const std::vector<float>& vec, Matrix* matrix,
   target_sample_rate_ = resample_options.target_sample_rate();
 
   TimeSeriesHeader input_header;
-  RETURN_IF_ERROR(time_series_util::FillTimeSeriesHeaderIfValid(
+  MP_RETURN_IF_ERROR(time_series_util::FillTimeSeriesHeaderIfValid(
       cc->Inputs().Index(0).Header(), &input_header));
 
   source_sample_rate_ = input_header.sample_rate();

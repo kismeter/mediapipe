@@ -15,10 +15,9 @@
 # Description:
 #   The dependencies of mediapipe.
 
-licenses(["notice"])  # Apache 2.0
-
 load("//mediapipe/framework/port:build_config.bzl", "mediapipe_cc_proto_library")
-load("//mediapipe/framework/port:build_config.bzl", "mediapipe_py_proto_library")
+
+licenses(["notice"])  # Apache 2.0
 
 package(default_visibility = ["//visibility:private"])
 
@@ -31,7 +30,7 @@ proto_library(
 mediapipe_cc_proto_library(
     name = "proto_descriptor_cc_proto",
     srcs = ["proto_descriptor.proto"],
-    visibility = ["//visibility:public"],
+    visibility = ["//mediapipe/framework:__subpackages__"],
     deps = [":proto_descriptor_proto"],
 )
 
@@ -176,6 +175,7 @@ cc_library(
     name = "random",
     hdrs = ["random_base.h"],
     visibility = ["//visibility:public"],
+    deps = ["//mediapipe/framework/port:integral_types"],
 )
 
 cc_library(
@@ -209,6 +209,7 @@ cc_library(
         "//mediapipe/framework/port:status",
         "//mediapipe/framework/port:statusor",
         "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/meta:type_traits",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
@@ -251,6 +252,7 @@ cc_library(
         "//mediapipe/framework/port:logging",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
     ],
 )
@@ -272,6 +274,14 @@ cc_library(
 )
 
 cc_library(
+    name = "re2",
+    hdrs = [
+        "re2.h",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
     name = "status_matchers",
     testonly = 1,
     hdrs = ["status_matchers.h"],
@@ -279,7 +289,7 @@ cc_library(
     visibility = ["//mediapipe/framework/port:__pkg__"],
     deps = [
         ":status",
-        "@com_google_googletest//:gtest_main",
+        "@com_google_googletest//:gtest",
     ],
 )
 
@@ -303,7 +313,10 @@ cc_library(
 
 cc_library(
     name = "threadpool",
-    srcs = ["threadpool.cc"],
+    srcs = select({
+        "//mediapipe:windows": ["threadpool_std_thread_impl.cc"],
+        "//conditions:default": ["threadpool_pthread_impl.cc"],
+    }),
     hdrs = ["threadpool.h"],
     # Use this library through "mediapipe/framework/port:threadpool".
     visibility = ["//mediapipe/framework/port:__pkg__"],

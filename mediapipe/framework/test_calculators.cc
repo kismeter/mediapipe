@@ -548,8 +548,12 @@ typedef std::function<::mediapipe::Status(const InputStreamShardSet&,
                                           OutputStreamShardSet*)>
     ProcessFunction;
 
+// A callback function for Calculator::Open, Process, or Close.
+typedef std::function<::mediapipe::Status(CalculatorContext* cc)>
+    CalculatorContextFunction;
+
 // A Calculator that runs a testing callback function in Process,
-// which is specified as an input side packet.
+// Open, or Close, which is specified as an input side packet.
 class LambdaCalculator : public CalculatorBase {
  public:
   static ::mediapipe::Status GetContract(CalculatorContract* cc) {
@@ -561,21 +565,49 @@ class LambdaCalculator : public CalculatorBase {
          id < cc->Outputs().EndId(); ++id) {
       cc->Outputs().Get(id).SetAny();
     }
-    cc->InputSidePackets().Index(0).Set<ProcessFunction>();
+    if (cc->InputSidePackets().HasTag("") > 0) {
+      cc->InputSidePackets().Tag("").Set<ProcessFunction>();
+    }
+    for (const std::string& tag : {"OPEN", "PROCESS", "CLOSE"}) {
+      if (cc->InputSidePackets().HasTag(tag)) {
+        cc->InputSidePackets().Tag(tag).Set<CalculatorContextFunction>();
+      }
+    }
     return ::mediapipe::OkStatus();
   }
 
   ::mediapipe::Status Open(CalculatorContext* cc) final {
-    callback_ = cc->InputSidePackets().Index(0).Get<ProcessFunction>();
+    if (cc->InputSidePackets().HasTag("OPEN")) {
+      return GetContextFn(cc, "OPEN")(cc);
+    }
     return ::mediapipe::OkStatus();
   }
 
   ::mediapipe::Status Process(CalculatorContext* cc) final {
-    return callback_(cc->Inputs(), &(cc->Outputs()));
+    if (cc->InputSidePackets().HasTag("PROCESS")) {
+      return GetContextFn(cc, "PROCESS")(cc);
+    }
+    if (cc->InputSidePackets().HasTag("") > 0) {
+      return GetProcessFn(cc, "")(cc->Inputs(), &cc->Outputs());
+    }
+    return ::mediapipe::OkStatus();
+  }
+
+  ::mediapipe::Status Close(CalculatorContext* cc) final {
+    if (cc->InputSidePackets().HasTag("CLOSE")) {
+      return GetContextFn(cc, "CLOSE")(cc);
+    }
+    return ::mediapipe::OkStatus();
   }
 
  private:
-  ProcessFunction callback_;
+  ProcessFunction GetProcessFn(CalculatorContext* cc, std::string tag) {
+    return cc->InputSidePackets().Tag(tag).Get<ProcessFunction>();
+  }
+  CalculatorContextFunction GetContextFn(CalculatorContext* cc,
+                                         std::string tag) {
+    return cc->InputSidePackets().Tag(tag).Get<CalculatorContextFunction>();
+  }
 };
 REGISTER_CALCULATOR(LambdaCalculator);
 
@@ -608,5 +640,62 @@ class DummyTestCalculator : public CalculatorBase {
   }
 };
 REGISTER_CALCULATOR(DummyTestCalculator);
+
+// A Calculator that passes the input value to the output after sleeping for
+// a set number of microseconds.
+class PassThroughWithSleepCalculator : public CalculatorBase {
+ public:
+  static ::mediapipe::Status GetContract(CalculatorContract* cc) {
+    cc->Inputs().Index(0).Set<int>();
+    cc->Outputs().Index(0).SetSameAs(&cc->Inputs().Index(0));
+    cc->InputSidePackets().Tag("SLEEP_MICROS").Set<int>();
+    cc->InputSidePackets().Tag("CLOCK").Set<std::shared_ptr<Clock>>();
+    return ::mediapipe::OkStatus();
+  }
+  ::mediapipe::Status Open(CalculatorContext* cc) final {
+    cc->SetOffset(TimestampDiff(0));
+    sleep_micros_ = cc->InputSidePackets().Tag("SLEEP_MICROS").Get<int>();
+    if (sleep_micros_ < 0) {
+      return ::mediapipe::InternalError("SLEEP_MICROS should be >= 0");
+    }
+    clock_ = cc->InputSidePackets().Tag("CLOCK").Get<std::shared_ptr<Clock>>();
+    return ::mediapipe::OkStatus();
+  }
+  ::mediapipe::Status Process(CalculatorContext* cc) final {
+    clock_->Sleep(absl::Microseconds(sleep_micros_));
+    int value = cc->Inputs().Index(0).Value().Get<int>();
+    cc->Outputs().Index(0).Add(new int(value), cc->InputTimestamp());
+    return ::mediapipe::OkStatus();
+  }
+
+ private:
+  int sleep_micros_ = 0;
+  std::shared_ptr<Clock> clock_;
+};
+REGISTER_CALCULATOR(PassThroughWithSleepCalculator);
+
+// A Calculator that multiples two input values.
+class MultiplyIntCalculator : public CalculatorBase {
+ public:
+  static ::mediapipe::Status GetContract(CalculatorContract* cc) {
+    cc->Inputs().Index(0).Set<int>();
+    cc->Inputs().Index(1).SetSameAs(&cc->Inputs().Index(0));
+    // cc->Outputs().Index(0).SetSameAs(&cc->Inputs().Index(0));
+    RET_CHECK(cc->Outputs().HasTag("OUT"));
+    cc->Outputs().Tag("OUT").SetSameAs(&cc->Inputs().Index(0));
+    return ::mediapipe::OkStatus();
+  }
+  ::mediapipe::Status Open(CalculatorContext* cc) final {
+    cc->SetOffset(TimestampDiff(0));
+    return ::mediapipe::OkStatus();
+  }
+  ::mediapipe::Status Process(CalculatorContext* cc) final {
+    int x = cc->Inputs().Index(0).Value().Get<int>();
+    int y = cc->Inputs().Index(1).Value().Get<int>();
+    cc->Outputs().Tag("OUT").Add(new int(x * y), cc->InputTimestamp());
+    return ::mediapipe::OkStatus();
+  }
+};
+REGISTER_CALCULATOR(MultiplyIntCalculator);
 
 }  // namespace mediapipe

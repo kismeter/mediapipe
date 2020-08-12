@@ -28,4 +28,69 @@
 #define MEDIAPIPE_MOBILE
 #endif
 
+#if !defined(MEDIAPIPE_ANDROID) && defined(__ANDROID__)
+#define MEDIAPIPE_ANDROID
+#endif
+
+#if defined(__APPLE__)
+#include "TargetConditionals.h"  // for TARGET_OS_*
+#if !defined(MEDIAPIPE_IOS) && !TARGET_OS_OSX
+#define MEDIAPIPE_IOS
+#endif
+#if !defined(MEDIAPIPE_OSX) && TARGET_OS_OSX
+#define MEDIAPIPE_OSX
+#endif
+#endif
+
+// These platforms do not support OpenGL ES Compute Shaders (v3.1 and up),
+// but may or may not still be able to run other OpenGL code.
+#if !defined(MEDIAPIPE_DISABLE_GL_COMPUTE) &&         \
+    (defined(__APPLE__) || defined(__EMSCRIPTEN__) || \
+     defined(MEDIAPIPE_DISABLE_GPU) || MEDIAPIPE_USING_SWIFTSHADER)
+#define MEDIAPIPE_DISABLE_GL_COMPUTE
+#endif
+
+// Compile time target platform definitions.
+// Example: #if MEDIAPIPE_OPENGL_ES_VERSION >= MEDIAPIPE_OPENGL_ES_31
+#define MEDIAPIPE_OPENGL_ES_UNSUPPORTED 0
+#define MEDIAPIPE_OPENGL_ES_20 200
+#define MEDIAPIPE_OPENGL_ES_31 310
+
+#if defined(MEDIAPIPE_DISABLE_GPU)
+#define MEDIAPIPE_OPENGL_ES_VERSION MEDIAPIPE_OPENGL_ES_UNSUPPORTED
+#define MEDIAPIPE_METAL_ENABLED 0
+#else
+#if defined(MEDIAPIPE_ANDROID)
+#if defined(MEDIAPIPE_DISABLE_GL_COMPUTE)
+#define MEDIAPIPE_OPENGL_ES_VERSION MEDIAPIPE_OPENGL_ES_20
+#else
+#define MEDIAPIPE_OPENGL_ES_VERSION MEDIAPIPE_OPENGL_ES_31
+#endif
+#define MEDIAPIPE_METAL_ENABLED 0
+#elif defined(MEDIAPIPE_IOS)
+#define MEDIAPIPE_OPENGL_ES_VERSION MEDIAPIPE_OPENGL_ES_20
+#define MEDIAPIPE_METAL_ENABLED 1
+#elif defined(MEDIAPIPE_OSX)
+#define MEDIAPIPE_OPENGL_ES_VERSION MEDIAPIPE_OPENGL_ES_UNSUPPORTED
+#define MEDIAPIPE_METAL_ENABLED 1
+#else
+// GPU is not supported on Linux yet.
+#define MEDIAPIPE_OPENGL_ES_VERSION MEDIAPIPE_OPENGL_ES_UNSUPPORTED
+#define MEDIAPIPE_METAL_ENABLED 0
+#endif
+#endif
+
+#ifndef MEDIAPIPE_HAS_RTTI
+// Detect if RTTI is disabled in the compiler.
+#if defined(__clang__) && defined(__has_feature)
+#define MEDIAPIPE_HAS_RTTI __has_feature(cxx_rtti)
+#elif defined(__GNUC__) && !defined(__GXX_RTTI)
+#define MEDIAPIPE_HAS_RTTI 0
+#elif defined(_MSC_VER) && !defined(_CPPRTTI)
+#define MEDIAPIPE_HAS_RTTI 0
+#else
+#define MEDIAPIPE_HAS_RTTI 1
+#endif
+#endif  // MEDIAPIPE_HAS_RTTI
+
 #endif  // MEDIAPIPE_FRAMEWORK_PORT_H_

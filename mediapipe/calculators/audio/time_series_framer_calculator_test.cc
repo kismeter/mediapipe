@@ -35,6 +35,8 @@ namespace mediapipe {
 namespace {
 
 const int kInitialTimestampOffsetMicroseconds = 4;
+const int kGapBetweenPacketsInSeconds = 1;
+const int kUniversalInputPacketSize = 50;
 
 class TimeSeriesFramerCalculatorTest
     : public TimeSeriesCalculatorTest<TimeSeriesFramerCalculatorOptions> {
@@ -226,7 +228,7 @@ class TimeSeriesFramerCalculatorTest
 
 TEST_F(TimeSeriesFramerCalculatorTest, IntegerSampleDurationNoOverlap) {
   options_.set_frame_duration_seconds(100.0 / input_sample_rate_);
-  MEDIAPIPE_ASSERT_OK(Run());
+  MP_ASSERT_OK(Run());
   CheckOutput();
 }
 
@@ -234,7 +236,7 @@ TEST_F(TimeSeriesFramerCalculatorTest,
        IntegerSampleDurationNoOverlapHammingWindow) {
   options_.set_frame_duration_seconds(100.0 / input_sample_rate_);
   options_.set_window_function(TimeSeriesFramerCalculatorOptions::HAMMING);
-  MEDIAPIPE_ASSERT_OK(Run());
+  MP_ASSERT_OK(Run());
   CheckOutput();
 }
 
@@ -242,14 +244,14 @@ TEST_F(TimeSeriesFramerCalculatorTest,
        IntegerSampleDurationNoOverlapHannWindow) {
   options_.set_frame_duration_seconds(100.0 / input_sample_rate_);
   options_.set_window_function(TimeSeriesFramerCalculatorOptions::HANN);
-  MEDIAPIPE_ASSERT_OK(Run());
+  MP_ASSERT_OK(Run());
   CheckOutput();
 }
 
 TEST_F(TimeSeriesFramerCalculatorTest, IntegerSampleDurationAndOverlap) {
   options_.set_frame_duration_seconds(100.0 / input_sample_rate_);
   options_.set_frame_overlap_seconds(40.0 / input_sample_rate_);
-  MEDIAPIPE_ASSERT_OK(Run());
+  MP_ASSERT_OK(Run());
   CheckOutput();
 }
 
@@ -257,7 +259,7 @@ TEST_F(TimeSeriesFramerCalculatorTest, NonintegerSampleDurationAndOverlap) {
   options_.set_frame_duration_seconds(98.5 / input_sample_rate_);
   options_.set_frame_overlap_seconds(38.4 / input_sample_rate_);
 
-  MEDIAPIPE_ASSERT_OK(Run());
+  MP_ASSERT_OK(Run());
   CheckOutput();
 }
 
@@ -267,7 +269,7 @@ TEST_F(TimeSeriesFramerCalculatorTest, NegativeOverlapExactFrames) {
   // the 1100 input samples.
   options_.set_frame_duration_seconds(100.0 / input_sample_rate_);
   options_.set_frame_overlap_seconds(-10.0 / input_sample_rate_);
-  MEDIAPIPE_ASSERT_OK(Run());
+  MP_ASSERT_OK(Run());
   EXPECT_EQ(output().packets.size(), 10);
   CheckOutput();
 }
@@ -277,7 +279,7 @@ TEST_F(TimeSeriesFramerCalculatorTest, NegativeOverlapExactFramesLessSkip) {
   // the 1100 input samples.
   options_.set_frame_duration_seconds(100.0 / input_sample_rate_);
   options_.set_frame_overlap_seconds(-100.0 / input_sample_rate_);
-  MEDIAPIPE_ASSERT_OK(Run());
+  MP_ASSERT_OK(Run());
   EXPECT_EQ(output().packets.size(), 6);
   CheckOutput();
 }
@@ -287,7 +289,7 @@ TEST_F(TimeSeriesFramerCalculatorTest, NegativeOverlapWithPadding) {
   // on the sixth and last frame given 1100 sample input.
   options_.set_frame_duration_seconds(100.0 / input_sample_rate_);
   options_.set_frame_overlap_seconds(-100.0 / input_sample_rate_);
-  MEDIAPIPE_ASSERT_OK(Run());
+  MP_ASSERT_OK(Run());
   EXPECT_EQ(output().packets.size(), 6);
   CheckOutput();
 }
@@ -297,7 +299,7 @@ TEST_F(TimeSeriesFramerCalculatorTest, FixedFrameOverlap) {
   // results in ceil((1100 - 30) / 11) + 1 = 99 packets.
   options_.set_frame_duration_seconds(30 / input_sample_rate_);
   options_.set_frame_overlap_seconds((30.0 - 11.4) / input_sample_rate_);
-  MEDIAPIPE_ASSERT_OK(Run());
+  MP_ASSERT_OK(Run());
   EXPECT_EQ(output().packets.size(), 99);
   CheckOutput();
 }
@@ -308,7 +310,7 @@ TEST_F(TimeSeriesFramerCalculatorTest, VariableFrameOverlap) {
   options_.set_frame_duration_seconds(30 / input_sample_rate_);
   options_.set_frame_overlap_seconds((30 - 11.4) / input_sample_rate_);
   options_.set_emulate_fractional_frame_overlap(true);
-  MEDIAPIPE_ASSERT_OK(Run());
+  MP_ASSERT_OK(Run());
   EXPECT_EQ(output().packets.size(), 95);
   CheckOutput();
 }
@@ -319,7 +321,7 @@ TEST_F(TimeSeriesFramerCalculatorTest, VariableFrameSkip) {
   options_.set_frame_duration_seconds(30 / input_sample_rate_);
   options_.set_frame_overlap_seconds((30 - 41.4) / input_sample_rate_);
   options_.set_emulate_fractional_frame_overlap(true);
-  MEDIAPIPE_ASSERT_OK(Run());
+  MP_ASSERT_OK(Run());
   EXPECT_EQ(output().packets.size(), 27);
   CheckOutput();
 }
@@ -328,7 +330,7 @@ TEST_F(TimeSeriesFramerCalculatorTest, NoFinalPacketPadding) {
   options_.set_frame_duration_seconds(98.5 / input_sample_rate_);
   options_.set_pad_final_packet(false);
 
-  MEDIAPIPE_ASSERT_OK(Run());
+  MP_ASSERT_OK(Run());
   CheckOutput();
 }
 
@@ -369,7 +371,7 @@ class TimeSeriesFramerCalculatorWindowingSanityTest
     FillInputHeader();
     AppendInputPacket(new Matrix(Matrix::Ones(1, FrameDurationSamples())),
                       kInitialTimestampOffsetMicroseconds);
-    MEDIAPIPE_ASSERT_OK(RunGraph());
+    MP_ASSERT_OK(RunGraph());
     ASSERT_EQ(1, output().packets.size());
     ASSERT_NEAR(expected_average * FrameDurationSamples(),
                 output().packets[0].Get<Matrix>().sum(), 1e-5);
@@ -391,5 +393,93 @@ TEST_F(TimeSeriesFramerCalculatorWindowingSanityTest, HannWindowSanityCheck) {
   RunAndTestSinglePacketAverage(0.5f);
 }
 
-}  // anonymous namespace
+// A simple test class that checks the local packet time stamp. This class
+// generate a series of packets with and without gaps between packets and tests
+// the behavior with cumulative timestamping and local packet timestamping.
+class TimeSeriesFramerCalculatorTimestampingTest
+    : public TimeSeriesFramerCalculatorTest {
+ protected:
+  // Creates test input and saves a reference copy.
+  void InitializeInputForTimeStampingTest() {
+    concatenated_input_samples_.resize(0, num_input_channels_);
+    num_input_samples_ = 0;
+    for (int i = 0; i < 10; ++i) {
+      // This range of packet sizes was chosen such that some input
+      // packets will be smaller than the output packet size and other
+      // input packets will be larger.
+      int packet_size = kUniversalInputPacketSize;
+      double timestamp_seconds = kInitialTimestampOffsetMicroseconds * 1.0e-6 +
+                                 num_input_samples_ / input_sample_rate_;
+      if (options_.use_local_timestamp()) {
+        timestamp_seconds += kGapBetweenPacketsInSeconds * i;
+      }
+
+      Matrix* data_frame =
+          NewTestFrame(num_input_channels_, packet_size, timestamp_seconds);
+
+      AppendInputPacket(data_frame, round(timestamp_seconds *
+                                          Timestamp::kTimestampUnitsPerSecond));
+      num_input_samples_ += packet_size;
+    }
+  }
+
+  void CheckOutputTimestamps() {
+    int num_full_packets = output().packets.size();
+    if (options_.pad_final_packet()) {
+      num_full_packets -= 1;
+    }
+
+    int64 num_samples = 0;
+    for (int packet_num = 0; packet_num < num_full_packets; ++packet_num) {
+      const Packet& packet = output().packets[packet_num];
+      num_samples += FrameDurationSamples();
+      double expected_timestamp =
+          options_.use_local_timestamp()
+              ? GetExpectedLocalTimestampForSample(num_samples - 1)
+              : GetExpectedCumulativeTimestamp(num_samples - 1);
+      ASSERT_NEAR(packet.Timestamp().Seconds(), expected_timestamp, 1e-10);
+    }
+  }
+
+  ::mediapipe::Status RunTimestampTest() {
+    InitializeGraph();
+    InitializeInputForTimeStampingTest();
+    FillInputHeader();
+    return RunGraph();
+  }
+
+ private:
+  // Returns the timestamp in seconds based on local timestamping.
+  double GetExpectedLocalTimestampForSample(int sample_index) {
+    return kInitialTimestampOffsetMicroseconds * 1.0e-6 +
+           sample_index / input_sample_rate_ +
+           (sample_index / kUniversalInputPacketSize) *
+               kGapBetweenPacketsInSeconds;
+  }
+
+  // Returns the timestamp inseconds based on cumulative timestamping.
+  double GetExpectedCumulativeTimestamp(int sample_index) {
+    return kInitialTimestampOffsetMicroseconds * 1.0e-6 +
+           sample_index / FrameDurationSamples() * FrameDurationSamples() /
+               input_sample_rate_;
+  }
+};
+
+TEST_F(TimeSeriesFramerCalculatorTimestampingTest, UseLocalTimeStamp) {
+  options_.set_frame_duration_seconds(100.0 / input_sample_rate_);
+  options_.set_use_local_timestamp(true);
+
+  MP_ASSERT_OK(RunTimestampTest());
+  CheckOutputTimestamps();
+}
+
+TEST_F(TimeSeriesFramerCalculatorTimestampingTest, UseCumulativeTimeStamp) {
+  options_.set_frame_duration_seconds(100.0 / input_sample_rate_);
+  options_.set_use_local_timestamp(false);
+
+  MP_ASSERT_OK(RunTimestampTest());
+  CheckOutputTimestamps();
+}
+
+}  // namespace
 }  // namespace mediapipe

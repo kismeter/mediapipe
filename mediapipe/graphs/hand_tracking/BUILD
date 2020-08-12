@@ -12,80 +12,60 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load(
+    "//mediapipe/framework/tool:mediapipe_graph.bzl",
+    "mediapipe_binary_graph",
+)
+
 licenses(["notice"])  # Apache 2.0
 
 package(default_visibility = ["//visibility:public"])
 
-load(
-    "//mediapipe/framework/tool:mediapipe_graph.bzl",
-    "mediapipe_binary_graph",
-    "mediapipe_simple_subgraph",
-)
+exports_files(glob([
+    "*.pbtxt",
+]))
 
-mediapipe_simple_subgraph(
-    name = "hand_detection_gpu",
-    graph = "hand_detection_gpu.pbtxt",
-    register_as = "HandDetectionSubgraph",
+cc_library(
+    name = "desktop_offline_calculators",
     deps = [
-        "//mediapipe/calculators/image:image_properties_calculator",
-        "//mediapipe/calculators/image:image_transformation_calculator",
-        "//mediapipe/calculators/tflite:ssd_anchors_calculator",
-        "//mediapipe/calculators/tflite:tflite_converter_calculator",
-        "//mediapipe/calculators/tflite:tflite_custom_op_resolver_calculator",
-        "//mediapipe/calculators/tflite:tflite_inference_calculator",
-        "//mediapipe/calculators/tflite:tflite_tensors_to_detections_calculator",
-        "//mediapipe/calculators/util:detection_label_id_to_text_calculator",
-        "//mediapipe/calculators/util:detection_letterbox_removal_calculator",
-        "//mediapipe/calculators/util:detections_to_rects_calculator",
-        "//mediapipe/calculators/util:non_max_suppression_calculator",
-        "//mediapipe/calculators/util:rect_transformation_calculator",
+        "//mediapipe/calculators/core:flow_limiter_calculator",
+        "//mediapipe/calculators/core:gate_calculator",
+        "//mediapipe/calculators/core:immediate_mux_calculator",
+        "//mediapipe/calculators/core:packet_inner_join_calculator",
+        "//mediapipe/calculators/core:previous_loopback_calculator",
+        "//mediapipe/calculators/video:opencv_video_decoder_calculator",
+        "//mediapipe/calculators/video:opencv_video_encoder_calculator",
     ],
 )
 
-mediapipe_simple_subgraph(
-    name = "hand_landmark_gpu",
-    graph = "hand_landmark_gpu.pbtxt",
-    register_as = "HandLandmarkSubgraph",
+cc_library(
+    name = "desktop_tflite_calculators",
     deps = [
-        "//mediapipe/calculators/core:split_vector_calculator",
-        "//mediapipe/calculators/image:image_cropping_calculator",
-        "//mediapipe/calculators/image:image_properties_calculator",
-        "//mediapipe/calculators/image:image_transformation_calculator",
-        "//mediapipe/calculators/tflite:tflite_converter_calculator",
-        "//mediapipe/calculators/tflite:tflite_inference_calculator",
-        "//mediapipe/calculators/tflite:tflite_tensors_to_floats_calculator",
-        "//mediapipe/calculators/tflite:tflite_tensors_to_landmarks_calculator",
-        "//mediapipe/calculators/util:detections_to_rects_calculator",
-        "//mediapipe/calculators/util:landmark_letterbox_removal_calculator",
-        "//mediapipe/calculators/util:landmark_projection_calculator",
-        "//mediapipe/calculators/util:landmarks_to_detection_calculator",
-        "//mediapipe/calculators/util:rect_transformation_calculator",
-        "//mediapipe/calculators/util:thresholding_calculator",
+        ":desktop_offline_calculators",
+        "//mediapipe/calculators/core:merge_calculator",
+        "//mediapipe/graphs/hand_tracking/subgraphs:hand_detection_cpu",
+        "//mediapipe/graphs/hand_tracking/subgraphs:hand_landmark_cpu",
+        "//mediapipe/graphs/hand_tracking/subgraphs:renderer_cpu",
     ],
 )
 
-mediapipe_simple_subgraph(
-    name = "renderer_gpu",
-    graph = "renderer_gpu.pbtxt",
-    register_as = "RendererSubgraph",
-    deps = [
-        "//mediapipe/calculators/util:annotation_overlay_calculator",
-        "//mediapipe/calculators/util:detections_to_render_data_calculator",
-        "//mediapipe/calculators/util:landmarks_to_render_data_calculator",
-        "//mediapipe/calculators/util:rect_to_render_data_calculator",
-    ],
+mediapipe_binary_graph(
+    name = "hand_tracking_desktop_live_binary_graph",
+    graph = "hand_tracking_desktop_live.pbtxt",
+    output_name = "hand_tracking_desktop_live.binarypb",
+    deps = [":desktop_tflite_calculators"],
 )
 
 cc_library(
     name = "mobile_calculators",
     deps = [
-        ":hand_detection_gpu",
-        ":hand_landmark_gpu",
-        ":renderer_gpu",
         "//mediapipe/calculators/core:flow_limiter_calculator",
         "//mediapipe/calculators/core:gate_calculator",
         "//mediapipe/calculators/core:merge_calculator",
         "//mediapipe/calculators/core:previous_loopback_calculator",
+        "//mediapipe/graphs/hand_tracking/subgraphs:hand_detection_gpu",
+        "//mediapipe/graphs/hand_tracking/subgraphs:hand_landmark_gpu",
+        "//mediapipe/graphs/hand_tracking/subgraphs:renderer_gpu",
     ],
 )
 
@@ -97,11 +77,44 @@ mediapipe_binary_graph(
 )
 
 cc_library(
+    name = "multi_hand_desktop_tflite_calculators",
+    deps = [
+        ":desktop_offline_calculators",
+        "//mediapipe/calculators/util:association_norm_rect_calculator",
+        "//mediapipe/calculators/util:collection_has_min_size_calculator",
+        "//mediapipe/graphs/hand_tracking/subgraphs:multi_hand_detection_cpu",
+        "//mediapipe/graphs/hand_tracking/subgraphs:multi_hand_landmark_cpu",
+        "//mediapipe/graphs/hand_tracking/subgraphs:multi_hand_renderer_cpu",
+    ],
+)
+
+cc_library(
+    name = "multi_hand_mobile_calculators",
+    deps = [
+        "//mediapipe/calculators/core:flow_limiter_calculator",
+        "//mediapipe/calculators/core:gate_calculator",
+        "//mediapipe/calculators/core:previous_loopback_calculator",
+        "//mediapipe/calculators/util:association_norm_rect_calculator",
+        "//mediapipe/calculators/util:collection_has_min_size_calculator",
+        "//mediapipe/graphs/hand_tracking/subgraphs:multi_hand_detection_gpu",
+        "//mediapipe/graphs/hand_tracking/subgraphs:multi_hand_landmark_gpu",
+        "//mediapipe/graphs/hand_tracking/subgraphs:multi_hand_renderer_gpu",
+    ],
+)
+
+mediapipe_binary_graph(
+    name = "multi_hand_tracking_mobile_gpu_binary_graph",
+    graph = "multi_hand_tracking_mobile.pbtxt",
+    output_name = "multi_hand_tracking_mobile_gpu.binarypb",
+    deps = [":multi_hand_mobile_calculators"],
+)
+
+cc_library(
     name = "detection_mobile_calculators",
     deps = [
-        ":hand_detection_gpu",
-        ":renderer_gpu",
         "//mediapipe/calculators/core:flow_limiter_calculator",
+        "//mediapipe/graphs/hand_tracking/subgraphs:hand_detection_gpu",
+        "//mediapipe/graphs/hand_tracking/subgraphs:renderer_gpu",
     ],
 )
 

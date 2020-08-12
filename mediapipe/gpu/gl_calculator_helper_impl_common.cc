@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "mediapipe/gpu/gl_calculator_helper_impl.h"
+#include "mediapipe/gpu/gpu_buffer_format.h"
 #include "mediapipe/gpu/gpu_shared_data_internal.h"
 
 namespace mediapipe {
@@ -21,6 +22,17 @@ GlCalculatorHelperImpl::GlCalculatorHelperImpl(CalculatorContext* cc,
                                                GpuResources* gpu_resources)
     : gpu_resources_(*gpu_resources) {
   gl_context_ = gpu_resources_.gl_context(cc);
+// GL_ES_VERSION_2_0 and up (at least through ES 3.2) may contain the extension.
+// Checking against one also checks against higher ES versions. So this checks
+// against GLES >= 2.0.
+#if GL_ES_VERSION_2_0
+  // No linear float filtering by default, check extensions.
+  can_linear_filter_float_textures_ =
+      gl_context_->HasGlExtension("OES_texture_float_linear");
+#else
+  // Any float32 texture we create should automatically have linear filtering.
+  can_linear_filter_float_textures_ = true;
+#endif  // GL_ES_VERSION_2_0
 }
 
 GlCalculatorHelperImpl::~GlCalculatorHelperImpl() {
@@ -86,9 +98,24 @@ void GlCalculatorHelperImpl::BindFramebuffer(const GlTexture& dst) {
 #endif
 }
 
-void GlCalculatorHelperImpl::SetStandardTextureParams(GLenum target) {
-  glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+void GlCalculatorHelperImpl::SetStandardTextureParams(GLenum target,
+                                                      GLint internal_format) {
+  // Default to using linear filter everywhere. For float32 textures, fall back
+  // to GL_NEAREST if linear filtering unsupported.
+  GLint filter;
+  switch (internal_format) {
+    case GL_R32F:
+    case GL_RG32F:
+    case GL_RGBA32F:
+      // 32F (unlike 16f) textures do not always support texture filtering
+      // (According to OpenGL ES specification [TEXTURE IMAGE SPECIFICATION])
+      filter = can_linear_filter_float_textures_ ? GL_LINEAR : GL_NEAREST;
+      break;
+    default:
+      filter = GL_LINEAR;
+  }
+  glTexParameteri(target, GL_TEXTURE_MIN_FILTER, filter);
+  glTexParameteri(target, GL_TEXTURE_MAG_FILTER, filter);
   glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
@@ -136,7 +163,9 @@ GlTexture GlCalculatorHelperImpl::MapGlTextureBuffer(
 
   // TODO: do the params need to be reset here??
   glBindTexture(texture.target(), texture.name());
-  SetStandardTextureParams(texture.target());
+  GlTextureInfo info =
+      GlTextureInfoForGpuBufferFormat(texture_buffer->format(), texture.plane_);
+  SetStandardTextureParams(texture.target(), info.gl_internal_format);
   glBindTexture(texture.target(), 0);
 
   return texture;
@@ -150,7 +179,9 @@ GlTextureBufferSharedPtr GlCalculatorHelperImpl::MakeGlTextureBuffer(
       GpuBufferFormatForImageFormat(image_frame.Format()),
       image_frame.PixelData());
   glBindTexture(GL_TEXTURE_2D, buffer->name_);
-  SetStandardTextureParams(buffer->target_);
+  GlTextureInfo info =
+      GlTextureInfoForGpuBufferFormat(buffer->format_, /*plane=*/0);
+  SetStandardTextureParams(buffer->target_, info.gl_internal_format);
   glBindTexture(GL_TEXTURE_2D, 0);
 
   return buffer;

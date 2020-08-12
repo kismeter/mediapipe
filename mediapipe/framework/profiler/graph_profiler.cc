@@ -27,6 +27,7 @@
 #include "mediapipe/framework/port/ret_check.h"
 #include "mediapipe/framework/port/status.h"
 #include "mediapipe/framework/profiler/profiler_resource_util.h"
+#include "mediapipe/framework/tool/name_util.h"
 #include "mediapipe/framework/tool/tag_map.h"
 #include "mediapipe/framework/tool/validate_name.h"
 
@@ -133,7 +134,7 @@ void GraphProfiler::Initialize(
   for (int node_id = 0;
        node_id < validated_graph_config.CalculatorInfos().size(); ++node_id) {
     std::string node_name =
-        CanonicalNodeName(validated_graph_config.Config(), node_id);
+        tool::CanonicalNodeName(validated_graph_config.Config(), node_id);
     CalculatorProfile profile;
     profile.set_name(node_name);
     InitializeTimeHistogram(interval_size_usec, num_intervals,
@@ -174,6 +175,10 @@ void GraphProfiler::Pause() {
 }
 
 void GraphProfiler::Resume() {
+  // is_profiling_ enables recording of performance stats.
+  // is_tracing_ enables recording of timing events.
+  // While the graph is running, these variables indicate
+  // IsProfilerEnabled and IsTracerEnabled.
   is_profiling_ = IsProfilerEnabled(profiler_config_);
   is_tracing_ = IsTracerEnabled(profiler_config_);
 }
@@ -220,7 +225,7 @@ void GraphProfiler::Reset() {
   Pause();
   // If specified, write a final profile.
   if (IsTraceLogEnabled(profiler_config_)) {
-    RETURN_IF_ERROR(WriteProfile());
+    MP_RETURN_IF_ERROR(WriteProfile());
   }
   return ::mediapipe::OkStatus();
 }
@@ -423,7 +428,13 @@ void GraphProfiler::SetCloseRuntime(const CalculatorContext& calculator_context,
 
 void GraphProfiler::AddTimeSample(int64 start_time_usec, int64 end_time_usec,
                                   TimeHistogram* histogram) {
-  CHECK_GE(end_time_usec, start_time_usec);
+  if (end_time_usec < start_time_usec) {
+    LOG(ERROR) << absl::Substitute(
+        "end_time_usec ($0) is < start_time_usec ($1)", end_time_usec,
+        start_time_usec);
+    return;
+  }
+
   int64 time_usec = end_time_usec - start_time_usec;
   histogram->set_total(histogram->total() + time_usec);
   int64 interval_index = time_usec / histogram->interval_size_usec();
@@ -502,7 +513,7 @@ void GraphProfiler::AddProcessSample(
 }
 
 std::unique_ptr<GlProfilingHelper> GraphProfiler::CreateGlProfilingHelper() {
-  if (!IsProfilerEnabled(profiler_config_)) {
+  if (!IsTracerEnabled(profiler_config_)) {
     return nullptr;
   }
   return absl::make_unique<mediapipe::GlProfilingHelper>(shared_from_this());
@@ -520,7 +531,7 @@ class OstreamStream : public proto_ns::io::ZeroCopyOutputStream {
     return WriteBuffer();
   }
   void BackUp(int count) override { buffer_used_ -= count; }
-  proto_int64 ByteCount() const override { return position_; }
+  int64_t ByteCount() const override { return position_; }
 
  private:
   // Writes the buffer to the ostream.
@@ -576,7 +587,6 @@ void AssignNodeNames(GraphProfile* profile) {
   LOG(INFO) << "trace_log_path: " << trace_log_path;
   int log_interval_count = GetLogIntervalCount(profiler_config_);
   int log_file_count = GetLogFileCount(profiler_config_);
-  ++previous_log_index_;
 
   // Record the GraphTrace events since the previous WriteProfile.
   // The end_time is chosen to be trace_log_margin_usec in the past,
@@ -592,6 +602,10 @@ void AssignNodeNames(GraphProfile* profile) {
     tracer()->GetLog(previous_log_end_time_, end_time, trace);
   }
   previous_log_end_time_ = end_time;
+  // If there are no trace events, skip log writing.
+  if (is_tracing_ && trace->calculator_trace().empty()) {
+    return ::mediapipe::OkStatus();
+  }
 
   // Record the latest CalculatorProfiles.
   Status status;
@@ -603,6 +617,7 @@ void AssignNodeNames(GraphProfile* profile) {
   this->Reset();
 
   // Record the CalculatorGraphConfig, once per log file.
+  ++previous_log_index_;
   bool is_new_file = (previous_log_index_ % log_interval_count == 0);
   if (is_new_file) {
     *profile.mutable_config() = validated_graph_->Config();
