@@ -159,7 +159,7 @@ cc_library(
         "//conditions:default": [],
         "//mediapipe:apple": [
             "-x objective-c++",
-            "-fobjc-arc",
+            "-fobjc-arc",  # enable reference-counting
         ],
     }),
     visibility = ["//visibility:public"],
@@ -244,6 +244,7 @@ objc_library(
     hdrs = ["pixel_buffer_pool_util.h"],
     copts = [
         "-Wno-shorten-64-to-32",
+        "-std=c++17",
     ],
     sdk_frameworks = [
         "Accelerate",
@@ -266,6 +267,7 @@ objc_library(
     copts = [
         "-x objective-c++",
         "-Wno-shorten-64-to-32",
+        "-std=c++17",
     ],
     sdk_frameworks = [
         "CoreVideo",
@@ -300,6 +302,7 @@ objc_library(
     copts = [
         "-x objective-c++",
         "-Wno-shorten-64-to-32",
+        "-std=c++17",
     ],
     sdk_frameworks = [
         "CoreVideo",
@@ -408,19 +411,28 @@ cc_library(
 )
 
 cc_library(
+    name = "gl_texture_buffer_pool",
+    srcs = ["gl_texture_buffer_pool.cc"],
+    hdrs = ["gl_texture_buffer_pool.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":gl_base",
+        ":gl_texture_buffer",
+        ":gpu_buffer",
+        ":gpu_shared_data_header",
+        "//mediapipe/framework:calculator_context",
+        "//mediapipe/framework:calculator_node",
+        "//mediapipe/framework/port:logging",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/synchronization",
+    ],
+)
+
+cc_library(
     name = "gpu_buffer_multi_pool",
-    srcs = ["gpu_buffer_multi_pool.cc"] + select({
-        "//conditions:default": [
-            "gl_texture_buffer_pool.cc",
-        ],
-        "//mediapipe:ios": [],
-        "//mediapipe:macos": [
-            "gl_texture_buffer_pool.cc",
-        ],
-    }),
+    srcs = ["gpu_buffer_multi_pool.cc"],
     hdrs = ["gpu_buffer_multi_pool.h"] + select({
         "//conditions:default": [
-            "gl_texture_buffer_pool.h",
         ],
         "//mediapipe:ios": [
             # The inclusions check does not see that this is provided by
@@ -429,7 +441,6 @@ cc_library(
             "pixel_buffer_pool_util.h",
         ],
         "//mediapipe:macos": [
-            "gl_texture_buffer_pool.h",
         ],
     }),
     copts = select({
@@ -452,6 +463,7 @@ cc_library(
     ] + select({
         "//conditions:default": [
             ":gl_texture_buffer",
+            ":gl_texture_buffer_pool",
         ],
         "//mediapipe:ios": [
             ":pixel_buffer_pool_util",
@@ -460,6 +472,7 @@ cc_library(
         "//mediapipe:macos": [
             ":pixel_buffer_pool_util",
             ":gl_texture_buffer",
+            ":gl_texture_buffer_pool",
         ],
     }),
 )
@@ -571,6 +584,7 @@ objc_library(
     hdrs = HELPER_COMMON_HDRS,
     copts = [
         "-Wno-shorten-64-to-32",
+        "-std=c++17",
     ],
     sdk_frameworks = HELPER_IOS_FRAMEWORKS,
     visibility = ["//visibility:public"],
@@ -594,6 +608,7 @@ objc_library(
     hdrs = ["MPPMetalHelper.h"],
     copts = [
         "-Wno-shorten-64-to-32",
+        "-std=c++17",
     ],
     sdk_frameworks = [
         "CoreVideo",
@@ -806,6 +821,7 @@ mediapipe_cc_proto_library(
 objc_library(
     name = "metal_copy_calculator",
     srcs = ["MetalCopyCalculator.mm"],
+    copts = ["-std=c++17"],
     sdk_frameworks = [
         "CoreVideo",
         "Metal",
@@ -823,6 +839,7 @@ objc_library(
 objc_library(
     name = "metal_rgb_weight_calculator",
     srcs = ["MetalRgbWeightCalculator.mm"],
+    copts = ["-std=c++17"],
     sdk_frameworks = [
         "CoreVideo",
         "Metal",
@@ -839,6 +856,7 @@ objc_library(
 objc_library(
     name = "metal_sobel_calculator",
     srcs = ["MetalSobelCalculator.mm"],
+    copts = ["-std=c++17"],
     sdk_frameworks = [
         "CoreVideo",
         "Metal",
@@ -855,6 +873,7 @@ objc_library(
 objc_library(
     name = "metal_sobel_compute_calculator",
     srcs = ["MetalSobelComputeCalculator.mm"],
+    copts = ["-std=c++17"],
     sdk_frameworks = [
         "CoreVideo",
         "Metal",
@@ -871,6 +890,7 @@ objc_library(
 objc_library(
     name = "mps_sobel_calculator",
     srcs = ["MPSSobelCalculator.mm"],
+    copts = ["-std=c++17"],
     sdk_frameworks = [
         "CoreVideo",
         "Metal",
@@ -905,6 +925,7 @@ objc_library(
     ],
     copts = [
         "-Wno-shorten-64-to-32",
+        "-std=c++17",
     ],
     data = [
         "//mediapipe/objc:testdata/googlelogo_color_272x92dp.png",
@@ -932,7 +953,7 @@ objc_library(
 ios_unit_test(
     name = "gl_ios_test",
     minimum_os_version = MIN_IOS_VERSION,
-    runner = "//googlemac/iPhone/Shared/Testing/EarlGrey/Runner:IOS_LATEST",
+    runner = "//testing/utp/ios:IOS_LATEST",
     tags = [
         "ios",
     ],
