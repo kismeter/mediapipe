@@ -42,12 +42,19 @@ message TensorFlowInferenceCalculatorOptions {
   // If the 0th dimension is the batch dimension, then the tensors are
   // concatenated on that dimension. If the 0th is a data dimension, then a 0th
   // dimension is added before concatenating. If added, the extra dimension is
-  // removed before outputing the tensor. Examples of each case: If you want
+  // removed before outputting the tensor. Examples of each case: If you want
   // to batch spectra of audio over time for an LSTM, a time-frequency
   // representation has a 0th dimension as the batch dimension. If you want to
   // batch frames of video that are [width, height, channels], the batch
   // dimension needs to be added.
   optional bool add_batch_dim_to_tensors = 3 [default = true];
+
+  // Whether to pad the last batch to batch_size or run inference on a partial
+  // batch.
+  // Setting this to false is useful for TPU models that use in-graph batching
+  // as padding in MediaPipe conflicts with merging of batches in tensorflows
+  // batch ops.
+  optional bool pad_to_batch_size = 8 [default = true];
 
   // These pairs represent feed and fetch tensors for handling recurrent state.
   // Each entry is a colon separated pair of strings. The first half of each

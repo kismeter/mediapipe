@@ -114,7 +114,9 @@ TEST(CalculatorTest, SourceProcessOrder) {
   PacketSet input_side_packets(tool::CreateTagMap({}).value());
 
   CalculatorState calculator_state("Node", /*node_id=*/0, "Calculator",
-                                   CalculatorGraphConfig::Node(), nullptr);
+                                   CalculatorGraphConfig::Node(),
+                                   /*profiling_context=*/nullptr,
+                                   /*graph_service_manager=*/nullptr);
 
   calculator_state.SetInputSidePackets(&input_side_packets);
 
@@ -174,7 +176,7 @@ TEST(CalculatorTest, CreateByName) {
 TEST(CalculatorTest, CreateByNameWhitelisted) {
   // Reset the registration namespace whitelist.
   *const_cast<absl::flat_hash_set<std::string>*>(
-      &NamespaceWhitelist::TopNamespaces()) = absl::flat_hash_set<std::string>{
+      &NamespaceAllowlist::TopNamespaces()) = absl::flat_hash_set<std::string>{
       "mediapipe::test_ns::whitelisted_ns",
       "mediapipe",
   };

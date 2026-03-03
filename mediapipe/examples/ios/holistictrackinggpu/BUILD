@@ -16,6 +16,7 @@ load(
     "@build_bazel_rules_apple//apple:ios.bzl",
     "ios_application",
 )
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load(
     "//mediapipe/examples/ios:bundle_id.bzl",
     "BUNDLE_ID_PREFIX",
@@ -24,7 +25,7 @@ load(
 
 licenses(["notice"])
 
-MIN_IOS_VERSION = "10.0"
+MIN_IOS_VERSION = "12.0"
 
 alias(
     name = "holistictrackinggpu",
@@ -55,9 +56,10 @@ objc_library(
     name = "HolisticTrackingGpuAppLibrary",
     data = [
         "//mediapipe/graphs/holistic_tracking:holistic_tracking_gpu.binarypb",
-        "//mediapipe/modules/face_detection:face_detection_front.tflite",
+        "//mediapipe/modules/face_detection:face_detection_short_range.tflite",
         "//mediapipe/modules/face_landmark:face_landmark.tflite",
-        "//mediapipe/modules/hand_landmark:hand_landmark.tflite",
+        "//mediapipe/modules/hand_landmark:hand_landmark_full.tflite",
+        "//mediapipe/modules/hand_landmark:hand_landmark_lite.tflite",
         "//mediapipe/modules/hand_landmark:handedness.txt",
         "//mediapipe/modules/holistic_landmark:hand_recrop.tflite",
         "//mediapipe/modules/pose_detection:pose_detection.tflite",
@@ -66,7 +68,6 @@ objc_library(
     deps = [
         "//mediapipe/examples/ios/common:CommonMediaPipeAppLibrary",
     ] + select({
-        "//mediapipe:ios_i386": [],
         "//mediapipe:ios_x86_64": [],
         "//conditions:default": [
             "//mediapipe/graphs/holistic_tracking:holistic_tracking_gpu_deps",

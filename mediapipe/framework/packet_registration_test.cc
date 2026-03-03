@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <memory>
+#include <utility>
+
 #include "absl/strings/str_cat.h"
+#include "mediapipe/framework/api2/builder.h"
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/packet.h"
 #include "mediapipe/framework/packet_test.pb.h"
@@ -24,19 +28,25 @@
 namespace mediapipe {
 namespace {
 
+using ::mediapipe::api2::builder::Graph;
+using ::mediapipe::api2::builder::Stream;
+
 namespace test_ns {
+
+constexpr char kOutTag[] = "OUT";
+constexpr char kInTag[] = "IN";
 
 class TestSinkCalculator : public CalculatorBase {
  public:
   static absl::Status GetContract(CalculatorContract* cc) {
-    cc->Inputs().Tag("IN").Set<mediapipe::InputOnlyProto>();
-    cc->Outputs().Tag("OUT").Set<int>();
+    cc->Inputs().Tag(kInTag).Set<mediapipe::InputOnlyProto>();
+    cc->Outputs().Tag(kOutTag).Set<int>();
     return absl::OkStatus();
   }
 
   absl::Status Process(CalculatorContext* cc) override {
-    int x = cc->Inputs().Tag("IN").Get<mediapipe::InputOnlyProto>().x();
-    cc->Outputs().Tag("OUT").AddPacket(
+    int x = cc->Inputs().Tag(kInTag).Get<mediapipe::InputOnlyProto>().x();
+    cc->Outputs().Tag(kOutTag).AddPacket(
         MakePacket<int>(x).At(cc->InputTimestamp()));
     return absl::OkStatus();
   }
@@ -45,12 +55,40 @@ REGISTER_CALCULATOR(TestSinkCalculator);
 
 }  // namespace test_ns
 
-TEST(PacketTest, InputTypeRegistration) {
+TEST(PacketRegistrationTest, InputTypeRegistration) {
   using testing::Contains;
   ASSERT_EQ(mediapipe::InputOnlyProto{}.GetTypeName(),
             "mediapipe.InputOnlyProto");
   EXPECT_THAT(packet_internal::MessageHolderRegistry::GetRegisteredNames(),
               Contains("mediapipe.InputOnlyProto"));
+}
+
+TEST(PacketRegistrationTest, AdoptingRegisteredProtoWorks) {
+  CalculatorGraphConfig config;
+  {
+    Graph graph;
+    Stream<mediapipe::InputOnlyProto> input =
+        graph.In(0).SetName("in").Cast<mediapipe::InputOnlyProto>();
+
+    auto& sink_node = graph.AddNode("TestSinkCalculator");
+    input.ConnectTo(sink_node.In(test_ns::kInTag));
+    Stream<int> output = sink_node.Out(test_ns::kOutTag).Cast<int>();
+
+    output.ConnectTo(graph.Out(0)).SetName("out");
+
+    config = graph.GetConfig();
+  }
+
+  CalculatorGraph calculator_graph;
+  MP_ASSERT_OK(calculator_graph.Initialize(std::move(config)));
+  MP_ASSERT_OK(calculator_graph.StartRun({}));
+
+  int value = 10;
+  auto proto = std::make_unique<mediapipe::InputOnlyProto>();
+  proto->set_x(value);
+  MP_ASSERT_OK(calculator_graph.AddPacketToInputStream(
+      "in", Adopt(proto.release()).At(Timestamp(0))));
+  MP_ASSERT_OK(calculator_graph.WaitUntilIdle());
 }
 
 }  // namespace

@@ -13,6 +13,10 @@
 # limitations under the License.
 
 load(
+    "//mediapipe/framework/tool:mediapipe_files.bzl",
+    "mediapipe_files",
+)
+load(
     "//mediapipe/framework/tool:mediapipe_graph.bzl",
     "mediapipe_simple_subgraph",
 )
@@ -21,15 +25,18 @@ licenses(["notice"])
 
 package(default_visibility = ["//visibility:public"])
 
-exports_files([
+mediapipe_files(srcs = [
     "object_detection_3d_camera.tflite",
     "object_detection_3d_chair.tflite",
     "object_detection_3d_chair_1stage.tflite",
     "object_detection_3d_cup.tflite",
     "object_detection_3d_sneakers.tflite",
     "object_detection_3d_sneakers_1stage.tflite",
-    "object_detection_oidv4_labelmap.txt",
     "object_detection_ssd_mobilenetv2_oidv4_fp16.tflite",
+])
+
+exports_files(srcs = [
+    "object_detection_oidv4_labelmap.txt",
 ])
 
 mediapipe_simple_subgraph(
@@ -152,7 +159,7 @@ mediapipe_simple_subgraph(
         "//mediapipe/calculators/util:association_norm_rect_calculator",
         "//mediapipe/calculators/util:collection_has_min_size_calculator",
         "//mediapipe/calculators/util:detections_to_rects_calculator",
-        "//mediapipe/calculators/util:local_file_contents_calculator",
+        "//mediapipe/calculators/util:resource_provider_calculator",
         "//mediapipe/modules/objectron/calculators:frame_annotation_to_rect_calculator",
         "//mediapipe/modules/objectron/calculators:landmarks_to_frame_annotation_calculator",
         "//mediapipe/modules/objectron/calculators:lift_2d_frame_annotation_to_3d_calculator",

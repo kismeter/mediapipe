@@ -22,9 +22,9 @@
 
 namespace mediapipe {
 
-// Takes in an encoded image std::string, decodes it by OpenCV, and converts to
-// an ImageFrame. Note that this calculator only supports grayscale and RGB
-// images for now.
+// Takes in an encoded image string, decodes it by OpenCV, and converts to an
+// ImageFrame. Note that this calculator only supports grayscale and RGB images
+// for now.
 //
 // Example config:
 // node {
@@ -91,6 +91,11 @@ absl::Status OpenCvEncodedImageToImageFrameCalculator::Process(
       return mediapipe::FailedPreconditionErrorBuilder(MEDIAPIPE_LOC)
              << "Unsupported number of channels: " << decoded_mat.channels();
   }
+  if (output_mat.empty()) {
+    return mediapipe::InternalErrorBuilder(MEDIAPIPE_LOC)
+           << "Failed to decode image.";
+  }
+
   std::unique_ptr<ImageFrame> output_frame = absl::make_unique<ImageFrame>(
       image_format, decoded_mat.size().width, decoded_mat.size().height,
       ImageFrame::kGlDefaultAlignmentBoundary);

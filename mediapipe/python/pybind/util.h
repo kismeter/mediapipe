@@ -15,10 +15,15 @@
 #ifndef MEDIAPIPE_PYTHON_PYBIND_UTIL_H_
 #define MEDIAPIPE_PYTHON_PYBIND_UTIL_H_
 
+#include <cstdint>
+#include <string>
+
+#include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "mediapipe/framework/calculator.pb.h"
 #include "mediapipe/framework/port/file_helpers.h"
-#include "mediapipe/framework/port/status.h"
 #include "mediapipe/framework/timestamp.h"
+#include "pybind11/gil.h"
 #include "pybind11/pybind11.h"
 
 namespace mediapipe {
@@ -45,14 +50,21 @@ inline PyObject* StatusCodeToPyError(const ::absl::StatusCode& code) {
   }
 }
 
-inline void RaisePyErrorIfNotOk(const absl::Status& status) {
+inline void RaisePyErrorIfNotOk(const absl::Status& status,
+                                bool acquire_gil = false) {
   if (!status.ok()) {
-    throw RaisePyError(StatusCodeToPyError(status.code()),
-                       status.message().data());
+    if (acquire_gil) {
+      py::gil_scoped_acquire acquire;
+      throw RaisePyError(StatusCodeToPyError(status.code()),
+                         status.message().data());
+    } else {
+      throw RaisePyError(StatusCodeToPyError(status.code()),
+                         status.message().data());
+    }
   }
 }
 
-inline void RaisePyErrorIfOverflow(int64 value, int64 min, int64 max) {
+inline void RaisePyErrorIfOverflow(int64_t value, int64_t min, int64_t max) {
   if (value > max) {
     throw RaisePyError(PyExc_OverflowError,
                        absl::StrCat(value, " execeeds the maximum value (", max,

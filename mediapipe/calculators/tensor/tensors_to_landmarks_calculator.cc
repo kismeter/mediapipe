@@ -124,7 +124,7 @@ absl::Status TensorsToLandmarksCalculator::Open(CalculatorContext* cc) {
        kFlipVertically(cc).IsConnected())) {
     RET_CHECK(options_.has_input_image_height() &&
               options_.has_input_image_width())
-        << "Must provide input width/height for using flipping when outputing "
+        << "Must provide input width/height for using flipping when outputting "
            "landmarks in absolute coordinates.";
   }
   return absl::OkStatus();
@@ -139,9 +139,10 @@ absl::Status TensorsToLandmarksCalculator::Process(CalculatorContext* cc) {
   bool flip_vertically = kFlipVertically(cc).GetOr(options_.flip_vertically());
 
   const auto& input_tensors = *kInTensors(cc);
+  RET_CHECK(input_tensors[0].element_type() == Tensor::ElementType::kFloat32);
   int num_values = input_tensors[0].shape().num_elements();
   const int num_dimensions = num_values / num_landmarks_;
-  CHECK_GT(num_dimensions, 0);
+  ABSL_CHECK_GT(num_dimensions, 0);
 
   auto view = input_tensors[0].GetCpuReadView();
   auto raw_landmarks = view.buffer<float>();

@@ -18,6 +18,7 @@
 #include <memory>
 #include <vector>
 
+#include "absl/log/absl_check.h"
 #include "absl/memory/memory.h"
 #include "mediapipe/calculators/util/association_calculator.pb.h"
 #include "mediapipe/framework/calculator_context.h"
@@ -26,19 +27,9 @@
 #include "mediapipe/framework/port/canonical_errors.h"
 #include "mediapipe/framework/port/rectangle.h"
 #include "mediapipe/framework/port/status.h"
+#include "mediapipe/util/rectangle_util.h"
 
 namespace mediapipe {
-
-// Computes the overlap similarity based on Intersection over Union (IoU) of
-// two rectangles.
-inline float OverlapSimilarity(const Rectangle_f& rect1,
-                               const Rectangle_f& rect2) {
-  if (!rect1.Intersects(rect2)) return 0.0f;
-  // Compute IoU similarity score.
-  const float intersection_area = Rectangle_f(rect1).Intersect(rect2).Area();
-  const float normalization = rect1.Area() + rect2.Area() - intersection_area;
-  return normalization > 0.0f ? intersection_area / normalization : 0.0f;
-}
 
 // AssocationCalculator<T> accepts multiple inputs of vectors of type T that can
 // be converted to Rectangle_f. The output is a vector of type T that contains
@@ -82,7 +73,7 @@ class AssociationCalculator : public CalculatorBase {
       prev_input_stream_id_ = cc->Inputs().GetId("PREV", 0);
     }
     options_ = cc->Options<::mediapipe::AssociationCalculatorOptions>();
-    CHECK_GE(options_.min_similarity_threshold(), 0);
+    ABSL_CHECK_GE(options_.min_similarity_threshold(), 0);
 
     return absl::OkStatus();
   }
@@ -180,14 +171,14 @@ class AssociationCalculator : public CalculatorBase {
     // Compare this element with elements of the input collection. If this
     // element has high overlap with elements of the collection, remove
     // those elements from the collection and add this element.
-    ASSIGN_OR_RETURN(auto cur_rect, GetRectangle(element));
+    MP_ASSIGN_OR_RETURN(auto cur_rect, GetRectangle(element));
 
     bool change_id = false;
     int new_elem_id = -1;
 
     for (auto uit = current->begin(); uit != current->end();) {
-      ASSIGN_OR_RETURN(auto prev_rect, GetRectangle(*uit));
-      if (OverlapSimilarity(cur_rect, prev_rect) >
+      MP_ASSIGN_OR_RETURN(auto prev_rect, GetRectangle(*uit));
+      if (CalculateIou(cur_rect, prev_rect) >
           options_.min_similarity_threshold()) {
         std::pair<bool, int> prev_id = GetId(*uit);
         // If prev_id.first is false when some element doesn't have an ID,
@@ -232,7 +223,7 @@ class AssociationCalculator : public CalculatorBase {
         }
         const Rectangle_f& prev_rect = get_prev_rectangle.value();
 
-        if (OverlapSimilarity(cur_rect, prev_rect) >
+        if (CalculateIou(cur_rect, prev_rect) >
             options_.min_similarity_threshold()) {
           std::pair<bool, int> prev_id = GetId(prev_input_vec[ui]);
           // If prev_id.first is false when some element doesn't have an ID,

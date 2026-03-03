@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "//mediapipe/framework/tool:mediapipe_graph.bzl",
     "mediapipe_binary_graph",
@@ -27,10 +28,10 @@ mediapipe_simple_subgraph(
     graph = "holistic_tracking_to_render_data.pbtxt",
     register_as = "HolisticTrackingToRenderData",
     deps = [
-        "//mediapipe/calculators/core:concatenate_normalized_landmark_list_calculator",
+        "//mediapipe/calculators/core:concatenate_proto_list_calculator",
         "//mediapipe/calculators/core:concatenate_vector_calculator",
         "//mediapipe/calculators/core:merge_calculator",
-        "//mediapipe/calculators/core:split_normalized_landmark_list_calculator",
+        "//mediapipe/calculators/core:split_proto_list_calculator",
         "//mediapipe/calculators/core:split_vector_calculator",
         "//mediapipe/calculators/util:detections_to_render_data_calculator",
         "//mediapipe/calculators/util:landmarks_to_render_data_calculator",

@@ -14,8 +14,27 @@
 
 #include "mediapipe/framework/graph_output_stream.h"
 
+#include <functional>
+#include <memory>
+#include <string>
+#include <utility>
+
+#include "absl/log/absl_check.h"
+#include "absl/memory/memory.h"
+#include "absl/status/status.h"
+#include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
-#include "mediapipe/framework/port/status.h"
+#include "google/protobuf/repeated_ptr_field.h"
+#include "mediapipe/framework/collection_item_id.h"
+#include "mediapipe/framework/input_stream_manager.h"
+#include "mediapipe/framework/output_stream_manager.h"
+#include "mediapipe/framework/packet.h"
+#include "mediapipe/framework/packet_type.h"
+#include "mediapipe/framework/port/proto_ns.h"
+#include "mediapipe/framework/port/ret_check.h"
+#include "mediapipe/framework/port/status_macros.h"
+#include "mediapipe/framework/timestamp.h"
+#include "mediapipe/framework/tool/tag_map.h"
 
 namespace mediapipe {
 
@@ -125,9 +144,10 @@ absl::Status OutputStreamObserver::Notify() {
 absl::Status OutputStreamPollerImpl::Initialize(
     const std::string& stream_name, const PacketType* packet_type,
     std::function<void(InputStreamManager*, bool*)> queue_size_callback,
-    OutputStreamManager* output_stream_manager) {
+    OutputStreamManager* output_stream_manager, bool observe_timestamp_bounds) {
   MP_RETURN_IF_ERROR(GraphOutputStream::Initialize(stream_name, packet_type,
-                                                   output_stream_manager));
+                                                   output_stream_manager,
+                                                   observe_timestamp_bounds));
   input_stream_handler_->SetQueueSizeCallbacks(queue_size_callback,
                                                queue_size_callback);
   return absl::OkStatus();
@@ -139,20 +159,18 @@ void OutputStreamPollerImpl::PrepareForRun(
   input_stream_handler_->PrepareForRun(
       /*headers_ready_callback=*/[] {}, std::move(notification_callback),
       /*schedule_callback=*/nullptr, std::move(error_callback));
-  mutex_.Lock();
+  absl::MutexLock l(&mutex_);
   graph_has_error_ = false;
-  mutex_.Unlock();
 }
 
 void OutputStreamPollerImpl::Reset() {
-  mutex_.Lock();
+  absl::MutexLock l(&mutex_);
   graph_has_error_ = false;
   input_stream_->PrepareForRun();
-  mutex_.Unlock();
 }
 
 void OutputStreamPollerImpl::SetMaxQueueSize(int queue_size) {
-  CHECK(queue_size >= -1)
+  ABSL_CHECK(queue_size >= -1)
       << "Max queue size must be either -1 or non-negative.";
   input_stream_handler_->SetMaxQueueSize(queue_size);
 }
@@ -160,48 +178,62 @@ void OutputStreamPollerImpl::SetMaxQueueSize(int queue_size) {
 int OutputStreamPollerImpl::QueueSize() { return input_stream_->QueueSize(); }
 
 absl::Status OutputStreamPollerImpl::Notify() {
-  mutex_.Lock();
+  absl::MutexLock l(&mutex_);
   handler_condvar_.Signal();
-  mutex_.Unlock();
   return absl::OkStatus();
 }
 
 void OutputStreamPollerImpl::NotifyError() {
-  mutex_.Lock();
+  absl::MutexLock l(&mutex_);
   graph_has_error_ = true;
   handler_condvar_.Signal();
-  mutex_.Unlock();
 }
 
 bool OutputStreamPollerImpl::Next(Packet* packet) {
-  CHECK(packet);
+  ABSL_CHECK(packet);
   bool empty_queue = true;
+  bool timestamp_bound_changed = false;
   Timestamp min_timestamp = Timestamp::Unset();
-  mutex_.Lock();
-  while (true) {
-    min_timestamp = input_stream_->MinTimestampOrBound(&empty_queue);
-    if (graph_has_error_ || !empty_queue ||
-        min_timestamp == Timestamp::Done()) {
-      break;
+  {
+    absl::MutexLock l(&mutex_);
+    while (true) {
+      min_timestamp = input_stream_->MinTimestampOrBound(&empty_queue);
+      if (empty_queue) {
+        timestamp_bound_changed =
+            input_stream_handler_->ProcessTimestampBounds() &&
+            output_timestamp_ < min_timestamp.PreviousAllowedInStream();
+      }
+      if (graph_has_error_ || !empty_queue || timestamp_bound_changed ||
+          min_timestamp == Timestamp::Done()) {
+        break;
+      } else {
+        handler_condvar_.Wait(&mutex_);
+      }
+    }
+    if (graph_has_error_ && empty_queue) {
+      return false;
+    }
+    if (empty_queue) {
+      output_timestamp_ = min_timestamp.PreviousAllowedInStream();
     } else {
-      handler_condvar_.Wait(&mutex_);
+      output_timestamp_ = min_timestamp;
     }
   }
-  if (graph_has_error_ && empty_queue) {
-    mutex_.Unlock();
-    return false;
-  }
-  mutex_.Unlock();
+
   if (min_timestamp == Timestamp::Done()) {
     return false;
   }
-  int num_packets_dropped = 0;
-  bool stream_is_done = false;
-  *packet = input_stream_->PopPacketAtTimestamp(
-      min_timestamp, &num_packets_dropped, &stream_is_done);
-  CHECK_EQ(num_packets_dropped, 0)
-      << absl::Substitute("Dropped $0 packet(s) on input stream \"$1\".",
-                          num_packets_dropped, input_stream_->Name());
+  if (!empty_queue) {
+    int num_packets_dropped = 0;
+    bool stream_is_done = false;
+    *packet = input_stream_->PopPacketAtTimestamp(
+        min_timestamp, &num_packets_dropped, &stream_is_done);
+    ABSL_CHECK_EQ(num_packets_dropped, 0)
+        << absl::Substitute("Dropped $0 packet(s) on input stream \"$1\".",
+                            num_packets_dropped, input_stream_->Name());
+  } else if (timestamp_bound_changed) {
+    *packet = Packet().At(min_timestamp.PreviousAllowedInStream());
+  }
   return true;
 }
 

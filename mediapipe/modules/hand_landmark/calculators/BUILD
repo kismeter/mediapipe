@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 licenses(["notice"])
 
 package(default_visibility = ["//visibility:public"])
@@ -24,7 +26,6 @@ cc_library(
         "//mediapipe/framework:calculator_framework",
         "//mediapipe/framework:calculator_options_cc_proto",
         "//mediapipe/framework/formats:landmark_cc_proto",
-        "//mediapipe/framework/formats:location_data_cc_proto",
         "//mediapipe/framework/formats:rect_cc_proto",
         "//mediapipe/framework/port:ret_check",
         "//mediapipe/framework/port:status",

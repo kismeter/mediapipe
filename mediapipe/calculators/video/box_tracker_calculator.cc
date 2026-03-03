@@ -14,21 +14,23 @@
 
 #include <stdio.h>
 
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/container/node_hash_map.h"
 #include "absl/container/node_hash_set.h"
+#include "absl/log/absl_check.h"
+#include "absl/log/absl_log.h"
 #include "absl/strings/numbers.h"
 #include "mediapipe/calculators/video/box_tracker_calculator.pb.h"
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/formats/image_frame.h"
 #include "mediapipe/framework/formats/image_frame_opencv.h"
 #include "mediapipe/framework/formats/video_stream_header.h"
-#include "mediapipe/framework/port/integral_types.h"
-#include "mediapipe/framework/port/logging.h"
 #include "mediapipe/framework/port/parse_text_proto.h"
 #include "mediapipe/framework/port/ret_check.h"
 #include "mediapipe/framework/port/status.h"
@@ -78,7 +80,7 @@ const char kOptionsTag[] = "OPTIONS";
 //             TrackingData and added to current set of tracked boxes.
 //             This is recommended to be used with SyncSetInputStreamHandler.
 //  START_POS_PROTO_STRING: Same as START_POS, but is in the form of serialized
-//             protobuffer std::string. When both START_POS and
+//             protobuffer string. When both START_POS and
 //             START_POS_PROTO_STRING are present, START_POS is used. Suggest
 //             to specify only one of them.
 //   RESTART_POS: Same as START_POS, but exclusively for receiving detection
@@ -99,7 +101,7 @@ const char kOptionsTag[] = "OPTIONS";
 //             can be in arbitrary order.
 //             Use with SyncSetInputStreamHandler in streaming mode only.
 //   RA_TRACK_PROTO_STRING: Same as RA_TRACK, but is in the form of serialized
-//             protobuffer std::string. When both RA_TRACK and
+//             protobuffer string. When both RA_TRACK and
 //             RA_TRACK_PROTO_STRING are present, RA_TRACK is used. Suggest
 //             to specify only one of them.
 //
@@ -175,7 +177,7 @@ class BoxTrackerCalculator : public CalculatorBase {
   // computed for. Used in streaming mode.
   // Returns list of ids that failed.
   void StreamTrack(const TrackingData& data, int data_frame_num,
-                   int64 dst_timestamp_ms, int64 duration_ms, bool forward,
+                   int64_t dst_timestamp_ms, int64_t duration_ms, bool forward,
                    MotionBoxMap* box_map, std::vector<int>* failed_ids);
 
   // Fast forwards specified boxes from starting position to current play head
@@ -269,16 +271,16 @@ class BoxTrackerCalculator : public CalculatorBase {
   bool RunForwardTrack(
       const std::deque<std::pair<Timestamp, TrackingData>>::iterator&
           start_data,
-      int init_frame, MotionBoxMap* single_map, int64 end_time_msec);
+      int init_frame, MotionBoxMap* single_map, int64_t end_time_msec);
 
   bool RunBackwardTrack(
       const std::deque<std::pair<Timestamp, TrackingData>>::iterator&
           start_data,
-      int init_frame, MotionBoxMap* single_map, int64 end_time_msec);
+      int init_frame, MotionBoxMap* single_map, int64_t end_time_msec);
 
   void ObtainResultOfRandomAccessTrack(
       const MotionBoxMap& single_map, const TimedBoxProto& start,
-      int64 end_time_msec,
+      int64_t end_time_msec,
       const std::unique_ptr<TimedBoxProtoList>& result_list);
 };
 
@@ -293,21 +295,37 @@ const int BoxTrackerCalculator::kMotionBoxPathMinQueueSize = 2;
 
 namespace {
 
+constexpr char kCacheDirTag[] = "CACHE_DIR";
+constexpr char kInitialPosTag[] = "INITIAL_POS";
+constexpr char kRaBoxesTag[] = "RA_BOXES";
+constexpr char kBoxesTag[] = "BOXES";
+constexpr char kVizTag[] = "VIZ";
+constexpr char kRaTrackProtoStringTag[] = "RA_TRACK_PROTO_STRING";
+constexpr char kRaTrackTag[] = "RA_TRACK";
+constexpr char kCancelObjectIdTag[] = "CANCEL_OBJECT_ID";
+constexpr char kRestartPosTag[] = "RESTART_POS";
+constexpr char kStartPosProtoStringTag[] = "START_POS_PROTO_STRING";
+constexpr char kStartPosTag[] = "START_POS";
+constexpr char kStartTag[] = "START";
+constexpr char kVideoTag[] = "VIDEO";
+constexpr char kTrackTimeTag[] = "TRACK_TIME";
+constexpr char kTrackingTag[] = "TRACKING";
+
 // Convert box position according to rotation angle in degrees.
 void ConvertCoordinateForRotation(float in_top, float in_left, float in_bottom,
                                   float in_right, int rotation, float* out_top,
                                   float* out_left, float* out_bottom,
                                   float* out_right) {
-  CHECK(out_top != nullptr);
-  CHECK(out_left != nullptr);
-  CHECK(out_bottom != nullptr);
-  CHECK(out_right != nullptr);
+  ABSL_CHECK(out_top != nullptr);
+  ABSL_CHECK(out_left != nullptr);
+  ABSL_CHECK(out_bottom != nullptr);
+  ABSL_CHECK(out_right != nullptr);
   const float in_center_x = (in_left + in_right) * 0.5f;
   const float in_center_y = (in_top + in_bottom) * 0.5f;
   const float in_width = in_right - in_left;
   const float in_height = in_bottom - in_top;
-  CHECK_GT(in_width, 0);
-  CHECK_GT(in_height, 0);
+  ABSL_CHECK_GT(in_width, 0);
+  ABSL_CHECK_GT(in_height, 0);
   float out_center_x;
   float out_center_y;
   float out_width;
@@ -341,7 +359,7 @@ void ConvertCoordinateForRotation(float in_top, float in_left, float in_bottom,
       out_height = in_width;
       break;
     default:
-      LOG(ERROR) << "invalid rotation " << rotation;
+      ABSL_LOG(ERROR) << "invalid rotation " << rotation;
       out_center_x = in_center_x;
       out_center_y = in_center_y;
       out_width = in_width;
@@ -354,9 +372,9 @@ void ConvertCoordinateForRotation(float in_top, float in_left, float in_bottom,
   *out_right = out_center_x + out_width * 0.5f;
 }
 
-void AddStateToPath(const MotionBoxState& state, int64 time_msec,
+void AddStateToPath(const MotionBoxState& state, int64_t time_msec,
                     PathSegment* path) {
-  CHECK(path);
+  ABSL_CHECK(path);
   TimedBox result;
   TimedBoxFromMotionBoxState(state, &result);
   result.time_msec = time_msec;
@@ -367,85 +385,86 @@ void AddStateToPath(const MotionBoxState& state, int64 time_msec,
     path->insert(insert_pos,
                  InternalTimedBox(result, new MotionBoxState(state)));
   } else {
-    LOG(ERROR) << "Box at time " << time_msec << " already present; ignoring";
+    ABSL_LOG(ERROR) << "Box at time " << time_msec
+                    << " already present; ignoring";
   }
 }
 
 }  // namespace.
 
 absl::Status BoxTrackerCalculator::GetContract(CalculatorContract* cc) {
-  if (cc->Inputs().HasTag("TRACKING")) {
-    cc->Inputs().Tag("TRACKING").Set<TrackingData>();
+  if (cc->Inputs().HasTag(kTrackingTag)) {
+    cc->Inputs().Tag(kTrackingTag).Set<TrackingData>();
   }
 
-  if (cc->Inputs().HasTag("TRACK_TIME")) {
-    RET_CHECK(cc->Inputs().HasTag("TRACKING"))
+  if (cc->Inputs().HasTag(kTrackTimeTag)) {
+    RET_CHECK(cc->Inputs().HasTag(kTrackingTag))
         << "TRACK_TIME needs TRACKING input";
-    cc->Inputs().Tag("TRACK_TIME").SetAny();
+    cc->Inputs().Tag(kTrackTimeTag).SetAny();
   }
 
-  if (cc->Inputs().HasTag("VIDEO")) {
-    cc->Inputs().Tag("VIDEO").Set<ImageFrame>();
+  if (cc->Inputs().HasTag(kVideoTag)) {
+    cc->Inputs().Tag(kVideoTag).Set<ImageFrame>();
   }
 
-  if (cc->Inputs().HasTag("START")) {
+  if (cc->Inputs().HasTag(kStartTag)) {
     // Actual packet content does not matter.
-    cc->Inputs().Tag("START").SetAny();
+    cc->Inputs().Tag(kStartTag).SetAny();
   }
 
-  if (cc->Inputs().HasTag("START_POS")) {
-    cc->Inputs().Tag("START_POS").Set<TimedBoxProtoList>();
+  if (cc->Inputs().HasTag(kStartPosTag)) {
+    cc->Inputs().Tag(kStartPosTag).Set<TimedBoxProtoList>();
   }
 
-  if (cc->Inputs().HasTag("START_POS_PROTO_STRING")) {
-    cc->Inputs().Tag("START_POS_PROTO_STRING").Set<std::string>();
+  if (cc->Inputs().HasTag(kStartPosProtoStringTag)) {
+    cc->Inputs().Tag(kStartPosProtoStringTag).Set<std::string>();
   }
 
-  if (cc->Inputs().HasTag("RESTART_POS")) {
-    cc->Inputs().Tag("RESTART_POS").Set<TimedBoxProtoList>();
+  if (cc->Inputs().HasTag(kRestartPosTag)) {
+    cc->Inputs().Tag(kRestartPosTag).Set<TimedBoxProtoList>();
   }
 
-  if (cc->Inputs().HasTag("CANCEL_OBJECT_ID")) {
-    cc->Inputs().Tag("CANCEL_OBJECT_ID").Set<int>();
+  if (cc->Inputs().HasTag(kCancelObjectIdTag)) {
+    cc->Inputs().Tag(kCancelObjectIdTag).Set<int>();
   }
 
-  if (cc->Inputs().HasTag("RA_TRACK")) {
-    cc->Inputs().Tag("RA_TRACK").Set<TimedBoxProtoList>();
+  if (cc->Inputs().HasTag(kRaTrackTag)) {
+    cc->Inputs().Tag(kRaTrackTag).Set<TimedBoxProtoList>();
   }
 
-  if (cc->Inputs().HasTag("RA_TRACK_PROTO_STRING")) {
-    cc->Inputs().Tag("RA_TRACK_PROTO_STRING").Set<std::string>();
+  if (cc->Inputs().HasTag(kRaTrackProtoStringTag)) {
+    cc->Inputs().Tag(kRaTrackProtoStringTag).Set<std::string>();
   }
 
-  if (cc->Outputs().HasTag("VIZ")) {
-    RET_CHECK(cc->Inputs().HasTag("VIDEO"))
+  if (cc->Outputs().HasTag(kVizTag)) {
+    RET_CHECK(cc->Inputs().HasTag(kVideoTag))
         << "Output stream VIZ requires VIDEO to be present.";
-    cc->Outputs().Tag("VIZ").Set<ImageFrame>();
+    cc->Outputs().Tag(kVizTag).Set<ImageFrame>();
   }
 
-  if (cc->Outputs().HasTag("BOXES")) {
-    cc->Outputs().Tag("BOXES").Set<TimedBoxProtoList>();
+  if (cc->Outputs().HasTag(kBoxesTag)) {
+    cc->Outputs().Tag(kBoxesTag).Set<TimedBoxProtoList>();
   }
 
-  if (cc->Outputs().HasTag("RA_BOXES")) {
-    cc->Outputs().Tag("RA_BOXES").Set<TimedBoxProtoList>();
+  if (cc->Outputs().HasTag(kRaBoxesTag)) {
+    cc->Outputs().Tag(kRaBoxesTag).Set<TimedBoxProtoList>();
   }
 
 #if defined(__ANDROID__) || defined(__APPLE__) || defined(__EMSCRIPTEN__)
-  RET_CHECK(!cc->InputSidePackets().HasTag("INITIAL_POS"))
+  RET_CHECK(!cc->InputSidePackets().HasTag(kInitialPosTag))
       << "Unsupported on mobile";
 #else
-  if (cc->InputSidePackets().HasTag("INITIAL_POS")) {
-    cc->InputSidePackets().Tag("INITIAL_POS").Set<std::string>();
+  if (cc->InputSidePackets().HasTag(kInitialPosTag)) {
+    cc->InputSidePackets().Tag(kInitialPosTag).Set<std::string>();
   }
 #endif  // defined(__ANDROID__) || defined(__APPLE__) || defined(__EMSCRIPTEN__)
 
-  if (cc->InputSidePackets().HasTag("CACHE_DIR")) {
-    cc->InputSidePackets().Tag("CACHE_DIR").Set<std::string>();
+  if (cc->InputSidePackets().HasTag(kCacheDirTag)) {
+    cc->InputSidePackets().Tag(kCacheDirTag).Set<std::string>();
   }
 
-  RET_CHECK(cc->Inputs().HasTag("TRACKING") !=
-            cc->InputSidePackets().HasTag("CACHE_DIR"))
+  RET_CHECK(cc->Inputs().HasTag(kTrackingTag) !=
+            cc->InputSidePackets().HasTag(kCacheDirTag))
       << "Either TRACKING or CACHE_DIR needs to be specified.";
 
   if (cc->InputSidePackets().HasTag(kOptionsTag)) {
@@ -459,7 +478,7 @@ absl::Status BoxTrackerCalculator::Open(CalculatorContext* cc) {
   options_ = tool::RetrieveOptions(cc->Options<BoxTrackerCalculatorOptions>(),
                                    cc->InputSidePackets(), kOptionsTag);
 
-  RET_CHECK(!cc->InputSidePackets().HasTag("INITIAL_POS") ||
+  RET_CHECK(!cc->InputSidePackets().HasTag(kInitialPosTag) ||
             !options_.has_initial_position())
       << "Can not specify initial position as side packet and via options";
 
@@ -468,11 +487,12 @@ absl::Status BoxTrackerCalculator::Open(CalculatorContext* cc) {
   }
 
 #if !defined(__ANDROID__) && !defined(__APPLE__) && !defined(__EMSCRIPTEN__)
-  if (cc->InputSidePackets().HasTag("INITIAL_POS")) {
-    LOG(INFO) << "Parsing: "
-              << cc->InputSidePackets().Tag("INITIAL_POS").Get<std::string>();
+  if (cc->InputSidePackets().HasTag(kInitialPosTag)) {
+    ABSL_LOG(INFO)
+        << "Parsing: "
+        << cc->InputSidePackets().Tag(kInitialPosTag).Get<std::string>();
     initial_pos_ = ParseTextProtoOrDie<TimedBoxProtoList>(
-        cc->InputSidePackets().Tag("INITIAL_POS").Get<std::string>());
+        cc->InputSidePackets().Tag(kInitialPosTag).Get<std::string>());
   }
 #endif  // !defined(__ANDROID__) && !defined(__APPLE__) &&
         // !defined(__EMSCRIPTEN__)
@@ -484,10 +504,11 @@ absl::Status BoxTrackerCalculator::Open(CalculatorContext* cc) {
   }
 
   visualize_tracking_data_ =
-      options_.visualize_tracking_data() && cc->Outputs().HasTag("VIZ");
-  visualize_state_ = options_.visualize_state() && cc->Outputs().HasTag("VIZ");
+      options_.visualize_tracking_data() && cc->Outputs().HasTag(kVizTag);
+  visualize_state_ =
+      options_.visualize_state() && cc->Outputs().HasTag(kVizTag);
   visualize_internal_state_ =
-      options_.visualize_internal_state() && cc->Outputs().HasTag("VIZ");
+      options_.visualize_internal_state() && cc->Outputs().HasTag(kVizTag);
 
   // Force recording of internal state for rendering.
   if (visualize_internal_state_) {
@@ -500,8 +521,8 @@ absl::Status BoxTrackerCalculator::Open(CalculatorContext* cc) {
     options_.mutable_tracker_options()->set_record_path_states(true);
   }
 
-  if (cc->InputSidePackets().HasTag("CACHE_DIR")) {
-    cache_dir_ = cc->InputSidePackets().Tag("CACHE_DIR").Get<std::string>();
+  if (cc->InputSidePackets().HasTag(kCacheDirTag)) {
+    cache_dir_ = cc->InputSidePackets().Tag(kCacheDirTag).Get<std::string>();
     RET_CHECK(!cache_dir_.empty());
     box_tracker_.reset(new BoxTracker(cache_dir_, options_.tracker_options()));
   } else {
@@ -511,7 +532,7 @@ absl::Status BoxTrackerCalculator::Open(CalculatorContext* cc) {
   }
 
   if (options_.streaming_track_data_cache_size() > 0) {
-    RET_CHECK(!cc->InputSidePackets().HasTag("CACHE_DIR"))
+    RET_CHECK(!cc->InputSidePackets().HasTag(kCacheDirTag))
         << "Streaming mode not compatible with cache dir.";
   }
 
@@ -533,11 +554,11 @@ absl::Status BoxTrackerCalculator::Process(CalculatorContext* cc) {
     return absl::OkStatus();
   }
 
-  InputStream* track_stream = cc->Inputs().HasTag("TRACKING")
-                                  ? &(cc->Inputs().Tag("TRACKING"))
+  InputStream* track_stream = cc->Inputs().HasTag(kTrackingTag)
+                                  ? &(cc->Inputs().Tag(kTrackingTag))
                                   : nullptr;
-  InputStream* track_time_stream = cc->Inputs().HasTag("TRACK_TIME")
-                                       ? &(cc->Inputs().Tag("TRACK_TIME"))
+  InputStream* track_time_stream = cc->Inputs().HasTag(kTrackTimeTag)
+                                       ? &(cc->Inputs().Tag(kTrackTimeTag))
                                        : nullptr;
 
   // Cache tracking data if possible.
@@ -562,8 +583,8 @@ absl::Status BoxTrackerCalculator::Process(CalculatorContext* cc) {
     }
   }
 
-  InputStream* start_pos_stream = cc->Inputs().HasTag("START_POS")
-                                      ? &(cc->Inputs().Tag("START_POS"))
+  InputStream* start_pos_stream = cc->Inputs().HasTag(kStartPosTag)
+                                      ? &(cc->Inputs().Tag(kStartPosTag))
                                       : nullptr;
 
   MotionBoxMap fast_forward_boxes;
@@ -575,8 +596,8 @@ absl::Status BoxTrackerCalculator::Process(CalculatorContext* cc) {
   }
 
   InputStream* start_pos_proto_string_stream =
-      cc->Inputs().HasTag("START_POS_PROTO_STRING")
-          ? &(cc->Inputs().Tag("START_POS_PROTO_STRING"))
+      cc->Inputs().HasTag(kStartPosProtoStringTag)
+          ? &(cc->Inputs().Tag(kStartPosProtoStringTag))
           : nullptr;
   if (start_pos_stream == nullptr || start_pos_stream->IsEmpty()) {
     if (start_pos_proto_string_stream &&
@@ -589,8 +610,8 @@ absl::Status BoxTrackerCalculator::Process(CalculatorContext* cc) {
     }
   }
 
-  InputStream* restart_pos_stream = cc->Inputs().HasTag("RESTART_POS")
-                                        ? &(cc->Inputs().Tag("RESTART_POS"))
+  InputStream* restart_pos_stream = cc->Inputs().HasTag(kRestartPosTag)
+                                        ? &(cc->Inputs().Tag(kRestartPosTag))
                                         : nullptr;
 
   if (restart_pos_stream && !restart_pos_stream->IsEmpty()) {
@@ -600,13 +621,13 @@ absl::Status BoxTrackerCalculator::Process(CalculatorContext* cc) {
   }
 
   InputStream* cancel_object_id_stream =
-      cc->Inputs().HasTag("CANCEL_OBJECT_ID")
-          ? &(cc->Inputs().Tag("CANCEL_OBJECT_ID"))
+      cc->Inputs().HasTag(kCancelObjectIdTag)
+          ? &(cc->Inputs().Tag(kCancelObjectIdTag))
           : nullptr;
   if (cancel_object_id_stream && !cancel_object_id_stream->IsEmpty()) {
     const int cancel_object_id = cancel_object_id_stream->Get<int>();
     if (streaming_motion_boxes_.erase(cancel_object_id) == 0) {
-      LOG(WARNING) << "box id " << cancel_object_id << " does not exist.";
+      ABSL_LOG(WARNING) << "box id " << cancel_object_id << " does not exist.";
     }
   }
 
@@ -616,8 +637,8 @@ absl::Status BoxTrackerCalculator::Process(CalculatorContext* cc) {
 
   TrackingData track_data_to_render;
 
-  if (cc->Outputs().HasTag("VIZ")) {
-    InputStream* video_stream = &(cc->Inputs().Tag("VIDEO"));
+  if (cc->Outputs().HasTag(kVizTag)) {
+    InputStream* video_stream = &(cc->Inputs().Tag(kVideoTag));
     if (!video_stream->IsEmpty()) {
       input_view = formats::MatView(&video_stream->Get<ImageFrame>());
 
@@ -631,13 +652,13 @@ absl::Status BoxTrackerCalculator::Process(CalculatorContext* cc) {
   // present at this frame.
   TimedBoxProtoList box_track_list;
 
-  CHECK(box_tracker_ || track_stream)
+  ABSL_CHECK(box_tracker_ || track_stream)
       << "Expected either batch or streaming mode";
 
   // Corresponding list of box states for rendering. For each id present at
   // this frame stores closest 1-2 states.
   std::vector<std::vector<MotionBoxState>> box_state_list;
-  int64 timestamp_msec = timestamp.Value() / 1000;
+  int64_t timestamp_msec = timestamp.Value() / 1000;
 
   if (box_tracker_) {  // Batch mode.
     // Ensure tracking has terminated.
@@ -677,8 +698,8 @@ absl::Status BoxTrackerCalculator::Process(CalculatorContext* cc) {
         track_data_to_render = track_data;
       }
 
-      const int64 time_ms = track_timestamps_.back().Value() / 1000;
-      const int64 duration_ms =
+      const int64_t time_ms = track_timestamps_.back().Value() / 1000;
+      const int64_t duration_ms =
           track_timestamps_.size() > 1
               ? time_ms - track_timestamps_.rbegin()[1].Value() / 1000
               : 0;
@@ -745,7 +766,7 @@ absl::Status BoxTrackerCalculator::Process(CalculatorContext* cc) {
       ++frame_num_since_reset_;
 
       // Generate results for queued up request.
-      if (cc->Outputs().HasTag("BOXES") && !queued_track_requests_.empty()) {
+      if (cc->Outputs().HasTag(kBoxesTag) && !queued_track_requests_.empty()) {
         for (int j = 0; j < queued_track_requests_.size(); ++j) {
           const Timestamp& past_time = queued_track_requests_[j];
           RET_CHECK(past_time.Value() < timestamp.Value())
@@ -770,7 +791,7 @@ absl::Status BoxTrackerCalculator::Process(CalculatorContext* cc) {
           }
 
           // Output for every time.
-          cc->Outputs().Tag("BOXES").Add(past_box_list.release(), past_time);
+          cc->Outputs().Tag(kBoxesTag).Add(past_box_list.release(), past_time);
         }
 
         queued_track_requests_.clear();
@@ -845,8 +866,8 @@ absl::Status BoxTrackerCalculator::Process(CalculatorContext* cc) {
   }
 
   // Handle random access track requests.
-  InputStream* ra_track_stream = cc->Inputs().HasTag("RA_TRACK")
-                                     ? &(cc->Inputs().Tag("RA_TRACK"))
+  InputStream* ra_track_stream = cc->Inputs().HasTag(kRaTrackTag)
+                                     ? &(cc->Inputs().Tag(kRaTrackTag))
                                      : nullptr;
 
   if (ra_track_stream && !ra_track_stream->IsEmpty()) {
@@ -861,8 +882,8 @@ absl::Status BoxTrackerCalculator::Process(CalculatorContext* cc) {
   }
 
   InputStream* ra_track_proto_string_stream =
-      cc->Inputs().HasTag("RA_TRACK_PROTO_STRING")
-          ? &(cc->Inputs().Tag("RA_TRACK_PROTO_STRING"))
+      cc->Inputs().HasTag(kRaTrackProtoStringTag)
+          ? &(cc->Inputs().Tag(kRaTrackProtoStringTag))
           : nullptr;
   if (ra_track_stream == nullptr || ra_track_stream->IsEmpty()) {
     if (ra_track_proto_string_stream &&
@@ -881,15 +902,15 @@ absl::Status BoxTrackerCalculator::Process(CalculatorContext* cc) {
 
   // Always output in batch, only output in streaming if tracking data
   // is present (might be in fast forward mode instead).
-  if (cc->Outputs().HasTag("BOXES") &&
+  if (cc->Outputs().HasTag(kBoxesTag) &&
       (box_tracker_ || !track_stream->IsEmpty())) {
     std::unique_ptr<TimedBoxProtoList> boxes(new TimedBoxProtoList());
     *boxes = std::move(box_track_list);
-    cc->Outputs().Tag("BOXES").Add(boxes.release(), timestamp);
+    cc->Outputs().Tag(kBoxesTag).Add(boxes.release(), timestamp);
   }
 
   if (viz_frame) {
-    cc->Outputs().Tag("VIZ").Add(viz_frame.release(), timestamp);
+    cc->Outputs().Tag(kVizTag).Add(viz_frame.release(), timestamp);
   }
 
   return absl::OkStatus();
@@ -922,41 +943,41 @@ void BoxTrackerCalculator::OutputRandomAccessTrack(
 
   for (int i = 0; i < box_list.box_size(); i += 2) {
     const TimedBoxProto start = box_list.box(i);
-    int64 end_time_msec = box_list.box(i + 1).time_msec();
+    int64_t end_time_msec = box_list.box(i + 1).time_msec();
     const bool forward_track = start.time_msec() < end_time_msec;
 
     if (track_timestamps_.empty()) {
-      LOG(WARNING) << "No tracking data cached yet.";
+      ABSL_LOG(WARNING) << "No tracking data cached yet.";
       continue;
     }
 
     // Performing the range check in msec (b/138399787)
-    const int64 tracking_start_timestamp_msec =
+    const int64_t tracking_start_timestamp_msec =
         track_timestamps_.front().Microseconds() / 1000;
-    const int64 tracking_end_timestamp_msec =
+    const int64_t tracking_end_timestamp_msec =
         track_timestamps_.back().Microseconds() / 1000;
     if (start.time_msec() < tracking_start_timestamp_msec) {
-      LOG(WARNING) << "Request start timestamp " << start.time_msec()
-                   << " too old. First frame in the window: "
-                   << tracking_start_timestamp_msec;
+      ABSL_LOG(WARNING) << "Request start timestamp " << start.time_msec()
+                        << " too old. First frame in the window: "
+                        << tracking_start_timestamp_msec;
       continue;
     }
     if (start.time_msec() > tracking_end_timestamp_msec) {
-      LOG(WARNING) << "Request start timestamp " << start.time_msec()
-                   << " too new. Last frame in the window: "
-                   << tracking_end_timestamp_msec;
+      ABSL_LOG(WARNING) << "Request start timestamp " << start.time_msec()
+                        << " too new. Last frame in the window: "
+                        << tracking_end_timestamp_msec;
       continue;
     }
     if (end_time_msec < tracking_start_timestamp_msec) {
-      LOG(WARNING) << "Request end timestamp " << end_time_msec
-                   << " too old. First frame in the window: "
-                   << tracking_start_timestamp_msec;
+      ABSL_LOG(WARNING) << "Request end timestamp " << end_time_msec
+                        << " too old. First frame in the window: "
+                        << tracking_start_timestamp_msec;
       continue;
     }
     if (end_time_msec > tracking_end_timestamp_msec) {
-      LOG(WARNING) << "Request end timestamp " << end_time_msec
-                   << " too new. Last frame in the window: "
-                   << tracking_end_timestamp_msec;
+      ABSL_LOG(WARNING) << "Request end timestamp " << end_time_msec
+                        << " too new. Last frame in the window: "
+                        << tracking_end_timestamp_msec;
       continue;
     }
 
@@ -964,7 +985,7 @@ void BoxTrackerCalculator::OutputRandomAccessTrack(
         GetRandomAccessTimestampPos(start, forward_track);
 
     if (timestamp_pos == track_timestamps_.end()) {
-      LOG(ERROR) << "Random access outside cached range";
+      ABSL_LOG(ERROR) << "Random access outside cached range";
       continue;
     }
 
@@ -975,13 +996,13 @@ void BoxTrackerCalculator::OutputRandomAccessTrack(
     // TODO: Interpolate random access tracking start_data instead
     // of dropping the request in the case of missing processed frame.
     if (start_data == tracking_data_cache_.end()) {
-      LOG(ERROR) << "Random access starts at unprocessed frame.";
+      ABSL_LOG(ERROR) << "Random access starts at unprocessed frame.";
       continue;
     }
 
     const int init_frame = timestamp_pos - track_timestamps_.begin() +
                            track_timestamps_base_index_;
-    CHECK_GE(init_frame, 0);
+    ABSL_CHECK_GE(init_frame, 0);
 
     MotionBoxMap single_map =
         PrepareRandomAccessTrack(start, init_frame, forward_track, start_data);
@@ -992,7 +1013,7 @@ void BoxTrackerCalculator::OutputRandomAccessTrack(
                                               &single_map, end_time_msec);
 
     if (track_error) {
-      LOG(ERROR) << "Could not track box.";
+      ABSL_LOG(ERROR) << "Could not track box.";
       continue;
     }
 
@@ -1001,7 +1022,7 @@ void BoxTrackerCalculator::OutputRandomAccessTrack(
   }
 
   cc->Outputs()
-      .Tag("RA_BOXES")
+      .Tag(kRaBoxesTag)
       .Add(result_list.release(), cc->InputTimestamp());
 }
 
@@ -1069,13 +1090,13 @@ BoxTrackerCalculator::PrepareRandomAccessTrack(
 
 bool BoxTrackerCalculator::RunForwardTrack(
     const std::deque<std::pair<Timestamp, TrackingData>>::iterator& start_data,
-    int init_frame, MotionBoxMap* single_map, int64 end_time_msec) {
+    int init_frame, MotionBoxMap* single_map, int64_t end_time_msec) {
   int curr_frame = init_frame;
   for (auto cache_pos = start_data; cache_pos != tracking_data_cache_.end();
        ++cache_pos, ++curr_frame) {
     std::vector<int> failed_box;
-    const int64 dst_time_msec = cache_pos->first.Value() / 1000;
-    const int64 curr_duration =
+    const int64_t dst_time_msec = cache_pos->first.Value() / 1000;
+    const int64_t curr_duration =
         (cache_pos == tracking_data_cache_.begin())
             ? 0
             : (cache_pos[0].first.Value() - cache_pos[-1].first.Value()) / 1000;
@@ -1094,13 +1115,13 @@ bool BoxTrackerCalculator::RunForwardTrack(
 
 bool BoxTrackerCalculator::RunBackwardTrack(
     const std::deque<std::pair<Timestamp, TrackingData>>::iterator& start_data,
-    int init_frame, MotionBoxMap* single_map, int64 end_time_msec) {
+    int init_frame, MotionBoxMap* single_map, int64_t end_time_msec) {
   int curr_frame = init_frame;
   for (auto cache_pos = start_data; cache_pos != tracking_data_cache_.begin();
        --cache_pos, --curr_frame) {
     std::vector<int> failed_box;
-    const int64 dst_time_msec = cache_pos[-1].first.Value() / 1000;
-    const int64 curr_duration =
+    const int64_t dst_time_msec = cache_pos[-1].first.Value() / 1000;
+    const int64_t curr_duration =
         (cache_pos[0].first.Value() - cache_pos[-1].first.Value()) / 1000;
     StreamTrack(cache_pos->second, curr_frame, dst_time_msec, curr_duration,
                 false,  // backward
@@ -1117,7 +1138,7 @@ bool BoxTrackerCalculator::RunBackwardTrack(
 
 void BoxTrackerCalculator::ObtainResultOfRandomAccessTrack(
     const MotionBoxMap& single_map, const TimedBoxProto& start,
-    int64 end_time_msec,
+    int64_t end_time_msec,
     const std::unique_ptr<TimedBoxProtoList>& result_list) {
   const MotionBoxPath& result_path = single_map.find(start.id())->second;
   TimedBox result_box;
@@ -1144,12 +1165,12 @@ void BoxTrackerCalculator::RenderInternalStates(
 
 void BoxTrackerCalculator::StreamTrack(const TrackingData& data,
                                        int data_frame_num,
-                                       int64 dst_timestamp_ms,
-                                       int64 duration_ms, bool forward,
+                                       int64_t dst_timestamp_ms,
+                                       int64_t duration_ms, bool forward,
                                        MotionBoxMap* box_map,
                                        std::vector<int>* failed_ids) {
-  CHECK(box_map);
-  CHECK(failed_ids);
+  ABSL_CHECK(box_map);
+  ABSL_CHECK(failed_ids);
 
   // Cache the actively discarded tracked ids from the new tracking data.
   for (const int discarded_id :
@@ -1179,7 +1200,7 @@ void BoxTrackerCalculator::StreamTrack(const TrackingData& data,
     if (!motion_box.second.box.TrackStep(from_frame,  // from frame.
                                          mvf, forward)) {
       failed_ids->push_back(motion_box.first);
-      LOG(INFO) << "lost track. pushed failed id: " << motion_box.first;
+      ABSL_LOG(INFO) << "lost track. pushed failed id: " << motion_box.first;
     } else {
       // Store result.
       PathSegment& path = motion_box.second.path;
@@ -1206,8 +1227,8 @@ void BoxTrackerCalculator::FastForwardStartPos(
                                           track_timestamps_.end(), timestamp);
 
     if (timestamp_pos == track_timestamps_.end()) {
-      LOG(WARNING) << "Received start pos beyond current timestamp, "
-                   << "Starting to track once frame arrives.";
+      ABSL_LOG(WARNING) << "Received start pos beyond current timestamp, "
+                        << "Starting to track once frame arrives.";
       *initial_pos_.add_box() = start_pos;
       continue;
     }
@@ -1215,7 +1236,7 @@ void BoxTrackerCalculator::FastForwardStartPos(
     // Start at previous frame.
     const int init_frame = timestamp_pos - track_timestamps_.begin() +
                            track_timestamps_base_index_;
-    CHECK_GE(init_frame, 0);
+    ABSL_CHECK_GE(init_frame, 0);
 
     // Locate corresponding tracking data.
     auto start_data = std::find_if(
@@ -1224,8 +1245,9 @@ void BoxTrackerCalculator::FastForwardStartPos(
             -> bool { return item.first == timestamp_pos[0]; });
 
     if (start_data == tracking_data_cache_.end()) {
-      LOG(ERROR) << "Box to fast forward outside tracking data cache. Ignoring."
-                 << " To avoid this error consider increasing the cache size.";
+      ABSL_LOG(ERROR)
+          << "Box to fast forward outside tracking data cache. Ignoring."
+          << " To avoid this error consider increasing the cache size.";
       continue;
     }
 
@@ -1256,14 +1278,15 @@ void BoxTrackerCalculator::FastForwardStartPos(
     for (auto cache_pos = start_data + 1;
          cache_pos != tracking_data_cache_.end(); ++cache_pos, ++curr_frame) {
       std::vector<int> failed_box;
-      const int64 curr_time_msec = cache_pos->first.Value() / 1000;
-      const int64 curr_duration =
+      const int64_t curr_time_msec = cache_pos->first.Value() / 1000;
+      const int64_t curr_duration =
           (cache_pos[0].first.Value() - cache_pos[-1].first.Value()) / 1000;
       StreamTrack(cache_pos->second, curr_frame, curr_time_msec, curr_duration,
                   true,  // forward
                   &single_map, &failed_box);
       if (!failed_box.empty()) {
-        LOG(WARNING) << "Unable to fast forward box at frame " << curr_frame;
+        ABSL_LOG(WARNING) << "Unable to fast forward box at frame "
+                          << curr_frame;
         track_error = true;
         break;
       }

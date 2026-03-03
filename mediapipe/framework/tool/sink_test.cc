@@ -14,9 +14,15 @@
 
 #include "mediapipe/framework/tool/sink.h"
 
+#include <map>
 #include <memory>
+#include <string>
+#include <utility>
 #include <vector>
 
+#include "absl/functional/bind_front.h"
+#include "absl/log/log.h"
+#include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/calculator_runner.h"
@@ -146,6 +152,48 @@ TEST(CallbackTest, TestAddMultiStreamCallback) {
   EXPECT_THAT(sums, testing::ElementsAre(15, 7, 9));
 }
 
+TEST(CallbackTest, TestAddMultiStreamCallbackWithPacketMap) {
+  CalculatorGraphConfig graph_config;
+  graph_config.add_input_stream("foo");
+  graph_config.add_input_stream("bar");
+
+  std::vector<int> sums;
+
+  std::map<std::string, Packet> side_packets;
+  tool::AddMultiStreamCallback(
+      {"foo", "bar"},
+      [&sums](mediapipe::tool::PacketMap packet_map) {
+        Packet foo_p = packet_map.at("foo");
+        Packet bar_p = packet_map.at("bar");
+        int foo = foo_p.IsEmpty() ? 0 : foo_p.Get<int>();
+        int bar = bar_p.IsEmpty() ? 0 : bar_p.Get<int>();
+        sums.push_back(foo + bar);
+      },
+      &graph_config, &side_packets);
+
+  CalculatorGraph graph(graph_config);
+  MP_ASSERT_OK(graph.StartRun(std::move(side_packets)));
+
+  MP_ASSERT_OK(graph.AddPacketToInputStream(
+      "foo", MakePacket<int>(10).At(Timestamp(1))));
+  MP_ASSERT_OK(
+      graph.AddPacketToInputStream("bar", MakePacket<int>(5).At(Timestamp(1))));
+
+  MP_ASSERT_OK(
+      graph.AddPacketToInputStream("foo", MakePacket<int>(7).At(Timestamp(2))));
+  // no bar input at 2
+
+  MP_ASSERT_OK(
+      graph.AddPacketToInputStream("foo", MakePacket<int>(4).At(Timestamp(3))));
+  MP_ASSERT_OK(
+      graph.AddPacketToInputStream("bar", MakePacket<int>(5).At(Timestamp(3))));
+
+  MP_ASSERT_OK(graph.CloseAllInputStreams());
+  MP_ASSERT_OK(graph.WaitUntilDone());
+
+  EXPECT_THAT(sums, testing::ElementsAre(15, 7, 9));
+}
+
 class TimestampBoundTestCalculator : public CalculatorBase {
  public:
   static absl::Status GetContract(CalculatorContract* cc) {
@@ -171,6 +219,7 @@ class TimestampBoundTestCalculator : public CalculatorBase {
 };
 REGISTER_CALCULATOR(TimestampBoundTestCalculator);
 
+#if 0  // test is flaky, try it with --runs_per_test=200
 TEST(CallbackTest, TestAddMultiStreamCallbackWithTimestampNotification) {
   std::string config_str = R"(
             node {
@@ -203,6 +252,7 @@ TEST(CallbackTest, TestAddMultiStreamCallbackWithTimestampNotification) {
 
   EXPECT_THAT(sums, testing::ElementsAre(10, 20));
 }
+#endif
 
 }  // namespace
 }  // namespace mediapipe

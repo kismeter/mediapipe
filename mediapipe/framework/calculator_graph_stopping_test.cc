@@ -12,20 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <atomic>
+#include <cstdint>
+#include <functional>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
+#include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "absl/time/clock.h"
-#include "absl/time/time.h"
+#include "absl/synchronization/notification.h"
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/calculator_graph.h"
-#include "mediapipe/framework/port/canonical_errors.h"
-#include "mediapipe/framework/port/core_proto_inc.h"
 #include "mediapipe/framework/port/gmock.h"
 #include "mediapipe/framework/port/gtest.h"
-#include "mediapipe/framework/port/integral_types.h"
 #include "mediapipe/framework/port/logging.h"
 #include "mediapipe/framework/port/status_matchers.h"
 #include "mediapipe/framework/tool/sink.h"
@@ -44,28 +45,32 @@ using mediapipe::MakePacket;
 using mediapipe::OutputStreamShardSet;
 using mediapipe::Timestamp;
 namespace proto_ns = mediapipe::proto_ns;
+
+constexpr char kEventTag[] = "EVENT";
+constexpr char kOutTag[] = "OUT";
+
 using mediapipe::CalculatorGraph;
 using mediapipe::Packet;
 
 class InfiniteSequenceCalculator : public mediapipe::CalculatorBase {
  public:
   static absl::Status GetContract(mediapipe::CalculatorContract* cc) {
-    cc->Outputs().Tag("OUT").Set<int>();
-    cc->Outputs().Tag("EVENT").Set<int>();
+    cc->Outputs().Tag(kOutTag).Set<int>();
+    cc->Outputs().Tag(kEventTag).Set<int>();
     return absl::OkStatus();
   }
   absl::Status Open(CalculatorContext* cc) override {
-    cc->Outputs().Tag("EVENT").AddPacket(MakePacket<int>(1).At(Timestamp(1)));
+    cc->Outputs().Tag(kEventTag).AddPacket(MakePacket<int>(1).At(Timestamp(1)));
     return absl::OkStatus();
   }
   absl::Status Process(CalculatorContext* cc) override {
-    cc->Outputs().Tag("OUT").AddPacket(
+    cc->Outputs().Tag(kOutTag).AddPacket(
         MakePacket<int>(count_).At(Timestamp(count_)));
     count_++;
     return absl::OkStatus();
   }
   absl::Status Close(CalculatorContext* cc) override {
-    cc->Outputs().Tag("EVENT").AddPacket(MakePacket<int>(2).At(Timestamp(2)));
+    cc->Outputs().Tag(kEventTag).AddPacket(MakePacket<int>(2).At(Timestamp(2)));
     return absl::OkStatus();
   }
 
@@ -81,11 +86,11 @@ class StoppingPassThroughCalculator : public mediapipe::CalculatorBase {
       cc->Inputs().Get("", i).SetAny();
       cc->Outputs().Get("", i).SetSameAs(&cc->Inputs().Get("", i));
     }
-    cc->Outputs().Tag("EVENT").Set<int>();
+    cc->Outputs().Tag(kEventTag).Set<int>();
     return absl::OkStatus();
   }
   absl::Status Open(CalculatorContext* cc) override {
-    cc->Outputs().Tag("EVENT").AddPacket(MakePacket<int>(1).At(Timestamp(1)));
+    cc->Outputs().Tag(kEventTag).AddPacket(MakePacket<int>(1).At(Timestamp(1)));
     return absl::OkStatus();
   }
   absl::Status Process(CalculatorContext* cc) override {
@@ -98,7 +103,7 @@ class StoppingPassThroughCalculator : public mediapipe::CalculatorBase {
                                     : mediapipe::tool::StatusStop();
   }
   absl::Status Close(CalculatorContext* cc) override {
-    cc->Outputs().Tag("EVENT").AddPacket(MakePacket<int>(2).At(Timestamp(2)));
+    cc->Outputs().Tag(kEventTag).AddPacket(MakePacket<int>(2).At(Timestamp(2)));
     return absl::OkStatus();
   }
 
@@ -196,11 +201,12 @@ TEST(CalculatorGraphStoppingTest, CloseAllPacketSources) {
   std::vector<int> event_packets;
   std::vector<int> event_out_packets;
   int kNumPackets = 8;
+  absl::Notification ready_to_close_all_packet_sources;
   MP_ASSERT_OK(graph.ObserveOutputStream(  //
       "input_out", [&](const Packet& packet) {
         out_packets.push_back(packet);
-        if (out_packets.size() >= kNumPackets) {
-          MP_EXPECT_OK(graph.CloseAllPacketSources());
+        if (out_packets.size() == kNumPackets) {
+          ready_to_close_all_packet_sources.Notify();
         }
         return absl::OkStatus();
       }));
@@ -220,16 +226,22 @@ TEST(CalculatorGraphStoppingTest, CloseAllPacketSources) {
         return absl::OkStatus();
       }));
   MP_ASSERT_OK(graph.StartRun({}));
+
+  // Adding input packets.
   for (int i = 0; i < kNumPackets; ++i) {
     MP_EXPECT_OK(graph.AddPacketToInputStream(
         "input", MakePacket<int>(i).At(Timestamp(i))));
   }
 
   // The graph run should complete with no error status.
+  ready_to_close_all_packet_sources.WaitForNotification();
+  MP_EXPECT_OK(graph.CloseAllPacketSources());
   MP_EXPECT_OK(graph.WaitUntilDone());
-  EXPECT_EQ(kNumPackets, out_packets.size());
-  EXPECT_LE(kNumPackets, count_packets.size());
-  std::vector<int> expected_events = {1, 2};
+
+  // Verifying outputs.
+  EXPECT_EQ(out_packets.size(), kNumPackets);
+  EXPECT_GE(count_packets.size(), kNumPackets);
+  const std::vector<int> expected_events = {1, 2};
   EXPECT_EQ(event_packets, expected_events);
   EXPECT_EQ(event_out_packets, expected_events);
 }

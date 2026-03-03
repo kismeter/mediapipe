@@ -21,7 +21,9 @@ import numpy as np
 from google.protobuf import text_format
 from mediapipe.framework import calculator_pb2
 from mediapipe.framework.formats import detection_pb2
+from mediapipe.framework.formats import time_series_header_pb2
 from mediapipe.python import solution_base
+from mediapipe.python.solution_base import PacketDataType
 
 CALCULATOR_OPTIONS_TEST_GRAPH_CONFIG = """
   input_stream: 'image_in'
@@ -93,7 +95,37 @@ class SolutionBaseTest(parameterized.TestCase):
     with self.assertRaisesRegex(error_type, error_message):
       solution_base.SolutionBase(graph_config=config_proto)
 
-  def test_invalid_input_data_type(self):
+  def test_valid_input_data_type_proto(self):
+    text_config = """
+      input_stream: 'input_detections'
+      output_stream: 'output_detections'
+      node {
+        calculator: 'DetectionUniqueIdCalculator'
+        input_stream: 'DETECTION_LIST:input_detections'
+        output_stream: 'DETECTION_LIST:output_detections'
+      }
+    """
+    config_proto = text_format.Parse(text_config,
+                                     calculator_pb2.CalculatorGraphConfig())
+    with solution_base.SolutionBase(graph_config=config_proto) as solution:
+      input_detections = detection_pb2.DetectionList()
+      detection_1 = input_detections.detection.add()
+      text_format.Parse('score: 0.5', detection_1)
+      detection_2 = input_detections.detection.add()
+      text_format.Parse('score: 0.8', detection_2)
+      results = solution.process({'input_detections': input_detections})
+      self.assertTrue(hasattr(results, 'output_detections'))
+      self.assertLen(results.output_detections.detection, 2)
+      expected_detection_1 = detection_pb2.Detection()
+      text_format.Parse('score: 0.5, detection_id: 1', expected_detection_1)
+      expected_detection_2 = detection_pb2.Detection()
+      text_format.Parse('score: 0.8, detection_id: 2', expected_detection_2)
+      self.assertEqual(results.output_detections.detection[0],
+                       expected_detection_1)
+      self.assertEqual(results.output_detections.detection[1],
+                       expected_detection_2)
+
+  def test_invalid_input_data_type_proto_vector(self):
     text_config = """
       input_stream: 'input_detections'
       output_stream: 'output_detections'
@@ -110,9 +142,65 @@ class SolutionBaseTest(parameterized.TestCase):
       text_format.Parse('score: 0.5', detection)
       with self.assertRaisesRegex(
           NotImplementedError,
-          'SolutionBase can only process image data. PROTO_LIST type is not supported.'
+          'SolutionBase can only process non-proto-list data. PROTO_LIST type'
+          ' is not supported.',
       ):
         solution.process({'input_detections': detection})
+
+  def test_valid_input_data_type_audio(self):
+    text_config = """
+      input_side_packet: "audio_header"
+      input_stream: 'input_audio'
+      output_stream: 'output_audio'
+
+      node {
+        calculator: "AddHeaderCalculator"
+        input_side_packet: "HEADER:audio_header"
+        input_stream: "DATA:input_audio"
+        output_stream: "input_audio_with_header"
+      }
+
+      node {
+        calculator: "ResampleTimeSeriesCalculator"
+        input_stream: "input_audio_with_header"
+        output_stream: "output_audio"
+        options {
+          [mediapipe.ResampleTimeSeriesCalculatorOptions.ext] {
+            resampler_type: RESAMPLER_RATIONAL_FACTOR
+            target_sample_rate: 16000.0
+            check_inconsistent_timestamps: false
+            resampler_rational_factor_options {
+              # equivalent to libresample's "high quality" mode
+              radius_factor: 17.0
+            }
+          }
+        }
+      }
+    """
+    config_proto = text_format.Parse(
+        text_config, calculator_pb2.CalculatorGraphConfig()
+    )
+
+    audio_header = time_series_header_pb2.TimeSeriesHeader()
+    audio_header.sample_rate = 16_000
+    audio_header.num_channels = 1
+
+    with solution_base.SolutionBase(
+        graph_config=config_proto,
+        side_inputs={
+            'audio_header': audio_header,
+        },
+        stream_type_hints={
+            'input_audio': solution_base.PacketDataType.AUDIO,
+            'output_audio': solution_base.PacketDataType.AUDIO,
+        },
+        side_packet_type_hints={
+            'audio_header': solution_base.PacketDataType.PROTO,
+        },
+    ) as solution:
+      input_audio = np.ones((1, 16_000), dtype=np.float32)
+      results = solution.process({'input_audio': input_audio})
+      self.assertTrue(hasattr(results, 'output_audio'))
 
   def test_invalid_input_image_data(self):
     text_config = """
@@ -266,6 +354,84 @@ class SolutionBaseTest(parameterized.TestCase):
             'ImageTransformation.output_width': 0,
             'ImageTransformation.output_height': 0
         })
+
+  @parameterized.named_parameters(('graph_without_side_packets', """
+      input_stream: 'image_in'
+      output_stream: 'image_out'
+      node {
+        calculator: 'ImageTransformationCalculator'
+        input_stream: 'IMAGE:image_in'
+        output_stream: 'IMAGE:transformed_image_in'
+      }
+      node {
+        calculator: 'ImageTransformationCalculator'
+        input_stream: 'IMAGE:transformed_image_in'
+        output_stream: 'IMAGE:image_out'
+      }
+      """, None), ('graph_with_side_packets', """
+      input_stream: 'image_in'
+      input_side_packet: 'allow_signal'
+      input_side_packet: 'rotation_degrees'
+      output_stream: 'image_out'
+      node {
+        calculator: 'ImageTransformationCalculator'
+        input_stream: 'IMAGE:image_in'
+        input_side_packet: 'ROTATION_DEGREES:rotation_degrees'
+        output_stream: 'IMAGE:transformed_image_in'
+      }
+      node {
+        calculator: 'GateCalculator'
+        input_stream: 'transformed_image_in'
+        input_side_packet: 'ALLOW:allow_signal'
+        output_stream: 'image_out_to_transform'
+      }
+      node {
+        calculator: 'ImageTransformationCalculator'
+        input_stream: 'IMAGE:image_out_to_transform'
+        input_side_packet: 'ROTATION_DEGREES:rotation_degrees'
+        output_stream: 'IMAGE:image_out'
+      }""", {
+          'allow_signal': True,
+          'rotation_degrees': 0
+      }))
+  def test_solution_reset(self, text_config, side_inputs):
+    config_proto = text_format.Parse(text_config,
+                                     calculator_pb2.CalculatorGraphConfig())
+    input_image = np.arange(27, dtype=np.uint8).reshape(3, 3, 3)
+    with solution_base.SolutionBase(
+        graph_config=config_proto, side_inputs=side_inputs) as solution:
+      for _ in range(20):
+        outputs = solution.process(input_image)
+        self.assertTrue(np.array_equal(input_image, outputs.image_out))
+        solution.reset()
+
+  def test_solution_stream_type_hints(self):
+    text_config = """
+      input_stream: 'union_type_image_in'
+      output_stream: 'image_type_out'
+      node {
+        calculator: 'ToImageCalculator'
+        input_stream: 'IMAGE:union_type_image_in'
+        output_stream: 'IMAGE:image_type_out'
+      }
+    """
+    config_proto = text_format.Parse(text_config,
+                                     calculator_pb2.CalculatorGraphConfig())
+    input_image = np.arange(27, dtype=np.uint8).reshape(3, 3, 3)
+    with solution_base.SolutionBase(
+        graph_config=config_proto,
+        stream_type_hints={'union_type_image_in': PacketDataType.IMAGE
+                          }) as solution:
+      for _ in range(20):
+        outputs = solution.process(input_image)
+        self.assertTrue(np.array_equal(input_image, outputs.image_type_out))
+    with solution_base.SolutionBase(
+        graph_config=config_proto,
+        stream_type_hints={'union_type_image_in': PacketDataType.IMAGE_FRAME
+                          }) as solution2:
+      for _ in range(20):
+        outputs = solution2.process(input_image)
+        self.assertTrue(np.array_equal(input_image, outputs.image_type_out))
 
   def _process_and_verify(self,
                           config_proto,

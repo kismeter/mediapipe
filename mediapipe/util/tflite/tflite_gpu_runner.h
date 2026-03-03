@@ -19,17 +19,22 @@
 #include <memory>
 #include <vector>
 
-#include "mediapipe/framework/port/status.h"
-#include "mediapipe/framework/port/statusor.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "mediapipe/framework/port.h"
+#include "mediapipe/framework/port/ret_check.h"
+#include "mediapipe/gpu/gl_base.h"
 #include "tensorflow/lite/core/api/op_resolver.h"
 #include "tensorflow/lite/delegates/gpu/api.h"
 #include "tensorflow/lite/delegates/gpu/common/model.h"
+#include "tensorflow/lite/delegates/gpu/common/shape.h"
 #include "tensorflow/lite/delegates/gpu/gl/api2.h"
 #include "tensorflow/lite/model.h"
+#include "tensorflow/lite/model_builder.h"
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(MEDIAPIPE_CHROMIUMOS)
 #include "tensorflow/lite/delegates/gpu/cl/api.h"
-#endif
+#endif  // defined(__ANDROID__) || defined(MEDIAPIPE_CHROMIUMOS)
 
 namespace tflite {
 namespace gpu {
@@ -54,10 +59,14 @@ class TFLiteGPURunner {
       : options_(options) {}
 
   absl::Status InitializeWithModel(const tflite::FlatBufferModel& flatbuffer,
-                                   const tflite::OpResolver& op_resolver);
+                                   const tflite::OpResolver& op_resolver,
+                                   bool allow_quant_ops = false);
 
   void ForceOpenGL() { opengl_is_forced_ = true; }
   void ForceOpenCL() { opencl_is_forced_ = true; }
+  void ForceOpenCLInitFromSerializedModel() {
+    opencl_init_from_serialized_model_is_forced_ = true;
+  }
 
   absl::Status BindSSBOToInputTensor(GLuint ssbo_id, int input_id);
   absl::Status BindSSBOToOutputTensor(GLuint ssbo_id, int output_id);
@@ -81,33 +90,42 @@ class TFLiteGPURunner {
     return output_shape_from_model_;
   }
 
-#ifdef __ANDROID__
-  void SetSerializedBinaryCache(std::vector<uint8_t>&& cache) {
-    serialized_binary_cache_ = std::move(cache);
-  }
+  // Must be invoked after `Build` invocation.
+  bool CanGenerateSerializedBinaryCache() { return is_cl_used_; }
+  absl::StatusOr<std::vector<uint8_t>> GetSerializedBinaryCache();
+  // Must be invoked before `Build` invocation.
+  void SetSerializedBinaryCache(std::vector<uint8_t>&& cache);
 
-  std::vector<uint8_t> GetSerializedBinaryCache() {
-    return cl_environment_->GetSerializedBinaryCache();
-  }
-#endif
+  // Must be invoked after `Build` invocation.
+  bool CanGenerateSerializedModel() { return is_cl_used_; }
+  absl::StatusOr<std::vector<uint8_t>> GetSerializedModel();
+  // Must be invoked before `Build` invocation.
+  void SetSerializedModel(std::vector<uint8_t>&& serialized_model);
 
  private:
   absl::Status InitializeOpenGL(std::unique_ptr<InferenceBuilder>* builder);
   absl::Status InitializeOpenCL(std::unique_ptr<InferenceBuilder>* builder);
 
+  absl::Status InitializeOpenCLFromSerializedModel(
+      std::unique_ptr<InferenceBuilder>* builder);
+
   InferenceOptions options_;
   std::unique_ptr<gl::InferenceEnvironment> gl_environment_;
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(MEDIAPIPE_CHROMIUMOS)
   std::unique_ptr<cl::InferenceEnvironment> cl_environment_;
 
   std::vector<uint8_t> serialized_binary_cache_;
-#endif
+  std::vector<uint8_t> serialized_model_;
+  bool serialized_model_used_ = false;
+#endif  // defined(__ANDROID__) || defined(MEDIAPIPE_CHROMIUMOS)
 
-  // graph_ is maintained temporarily and becomes invalid after runner_ is ready
+  // graph_gl_ is maintained temporarily and becomes invalid after runner_ is
+  // ready
   std::unique_ptr<GraphFloat32> graph_gl_;
   std::unique_ptr<GraphFloat32> graph_cl_;
   std::unique_ptr<InferenceRunner> runner_;
+  bool is_cl_used_ = false;
 
   // We keep information about input/output shapes, because they are needed
   // after graph_ becomes "converted" into runner_.
@@ -122,6 +140,7 @@ class TFLiteGPURunner {
 
   bool opencl_is_forced_ = false;
   bool opengl_is_forced_ = false;
+  bool opencl_init_from_serialized_model_is_forced_ = false;
 };
 
 }  // namespace gpu

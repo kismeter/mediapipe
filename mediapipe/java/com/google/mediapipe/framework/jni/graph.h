@@ -17,19 +17,26 @@
 
 #include <jni.h>
 
+#include <cstdint>
 #include <map>
 #include <memory>
-#include <queue>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-#include "mediapipe/framework/calculator_framework.h"
+#include "absl/status/status.h"
+#include "mediapipe/framework/graph_service.h"
+
+#ifdef MEDIAPIPE_PROFILER_AVAILABLE
+#include "mediapipe/framework/profiler/graph_profiler.h"
+#endif  // MEDIAPIPE_PROFILER_AVAILABLE
+
 #if !MEDIAPIPE_DISABLE_GPU
 #include "mediapipe/gpu/gl_calculator_helper.h"
+#include "mediapipe/gpu/gpu_shared_data_internal.h"
 #endif  // !MEDIAPIPE_DISABLE_GPU
 #include "absl/synchronization/mutex.h"
-#include "mediapipe/gpu/gpu_shared_data_internal.h"
+#include "mediapipe/framework/calculator_framework.h"
 
 namespace mediapipe {
 namespace android {
@@ -119,11 +126,11 @@ class Graph {
   // Puts a mediapipe packet into the context for management.
   // Returns the handle to the internal PacketWithContext object.
   int64_t WrapPacketIntoContext(const Packet& packet);
-
+#if !MEDIAPIPE_DISABLE_GPU
   // Gets the shared mediapipe::GpuResources. Only valid once the graph is
   // running.
   mediapipe::GpuResources* GetGpuResources() const;
-
+#endif  // !MEDIAPIPE_DISABLE_GPU
   // Adds a surface output for a given stream name.
   // Multiple outputs can be attached to the same stream.
   // Returns a native packet handle for the mediapipe::EglSurfaceHolder, or 0 in
@@ -131,7 +138,7 @@ class Graph {
   int64_t AddSurfaceOutput(const std::string& stream_name);
 
   // Sets a parent GL context to use for texture sharing.
-  absl::Status SetParentGlContext(int64 java_gl_context);
+  absl::Status SetParentGlContext(int64_t java_gl_context);
 
   // Sets the object for a service.
   template <typename T>
@@ -166,7 +173,9 @@ class Graph {
   void CallbackToJava(JNIEnv* env, jobject java_callback_obj,
                       const std::vector<Packet>& packets);
 
+#ifdef MEDIAPIPE_PROFILER_AVAILABLE
   ProfilingContext* GetProfilingContext();
+#endif
 
  private:
   // Increase the graph's default executor's worker thread stack size to run
@@ -212,12 +221,13 @@ class Graph {
   // All callback handlers managed by the context.
   std::vector<std::unique_ptr<internal::CallbackHandler>> callback_handlers_;
 
+#if !MEDIAPIPE_DISABLE_GPU
   // mediapipe::GpuResources used by the graph.
   // Note: this class does not create a CalculatorGraph until StartRunningGraph
   // is called, and we may have to create the mediapipe::GpuResources before
   // that time, e.g. before a SurfaceOutput is associated with a Surface.
   std::shared_ptr<mediapipe::GpuResources> gpu_resources_;
-
+#endif  // !MEDIAPIPE_DISABLE_GPU
   // Maps surface output names to the side packet used for the associated
   // surface.
   std::unordered_map<std::string, Packet> output_surface_side_packets_;

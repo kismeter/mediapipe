@@ -20,6 +20,7 @@
 #include <list>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -82,7 +83,7 @@ class InputStreamHandler {
   // flat_input_stream_managers is expected to point to a contiguous
   // flat array with InputStreamManagers corresponding to the id's in
   // InputStreamHandler::input_stream_managers_ (meaning it should point
-  // to somewhere in the middle of the master flat array of all input
+  // to somewhere in the middle of the main flat array of all input
   // stream managers).
   absl::Status InitializeInputStreamManagers(
       InputStreamManager* flat_input_stream_managers);
@@ -92,9 +93,9 @@ class InputStreamHandler {
   // Sets up the InputStreamShardSet by propagating data from the managers.
   absl::Status SetupInputShards(InputStreamShardSet* input_shards);
 
-  // Returns a vector of pairs of stream name and queue size for monitoring
-  // purpose.
-  std::vector<std::pair<std::string, int>> GetMonitoringInfo();
+  // Returns a vector of tuples of stream name, queue size, number of packets
+  // added, and minimum timestamp or bound for monitoring purpose.
+  std::vector<std::tuple<std::string, int, int, Timestamp>> GetMonitoringInfo();
 
   // Resets the input stream handler and its underlying input streams for
   // another run of the graph.
@@ -147,9 +148,15 @@ class InputStreamHandler {
 
   void Close();
 
-  // Returns a std::string that concatenates the stream names of all managed
-  // streams.
+  // Returns a string that concatenates the stream names of all managed streams.
   std::string DebugStreamNames() const;
+
+  // Return the stream name for an input stream in the format:
+  // stream_tag:stream_index:stream_name.
+  std::string DebugStreamName(CollectionItemId id) const;
+
+  // Returns the node name of the calculator node.
+  std::string GetNodeName() const;
 
   // Keeps scheduling new invocations until 1) the node is not ready or 2) the
   // max number of invocations that are allowed to be scheduled is reached.
@@ -321,8 +328,8 @@ using InputStreamHandlerRegistry = GlobalFactoryRegistry<
 #define REGISTER_INPUT_STREAM_HANDLER(name)                                    \
   REGISTER_FACTORY_FUNCTION_QUALIFIED(                                         \
       mediapipe::InputStreamHandlerRegistry, input_handler_registration, name, \
-      absl::make_unique<name, std::shared_ptr<tool::TagMap>,                   \
-                        CalculatorContextManager*, const MediaPipeOptions&,    \
-                        bool>)
+      std::make_unique<name, std::shared_ptr<tool::TagMap>,                    \
+                       CalculatorContextManager*, const MediaPipeOptions&,     \
+                       bool>)
 
 #endif  // MEDIAPIPE_FRAMEWORK_INPUT_STREAM_HANDLER_H_

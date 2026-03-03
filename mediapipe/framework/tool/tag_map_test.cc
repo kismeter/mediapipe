@@ -14,6 +14,7 @@
 
 #include "mediapipe/framework/tool/tag_map.h"
 
+#include "absl/log/absl_log.h"
 #include "absl/strings/str_join.h"
 #include "mediapipe/framework/port/gmock.h"
 #include "mediapipe/framework/port/gtest.h"
@@ -101,7 +102,7 @@ void TestSuccessTagMap(const std::vector<std::string>& tag_index_names,
   EXPECT_EQ(tags.size(), tag_map->Mapping().size())
       << "Parameters: in " << tag_map->DebugString();
   for (int i = 0; i < tags.size(); ++i) {
-    EXPECT_TRUE(mediapipe::ContainsKey(tag_map->Mapping(), tags[i]))
+    EXPECT_TRUE(tag_map->Mapping().contains(tags[i]))
         << "Parameters: Trying to find \"" << tags[i] << "\" in\n"
         << tag_map->DebugString();
   }
@@ -318,8 +319,8 @@ TEST(TagMapTest, SameAs) {
   }
 }
 
-// A helper function to test that a TagMap's debug std::string and short
-// debug std::string each satisfy a matcher.
+// A helper function to test that a TagMap's debug string and short
+// debug string each satisfy a matcher.
 template <typename Matcher>
 void TestDebugString(
     const absl::StatusOr<std::shared_ptr<tool::TagMap>>& statusor_tag_map,
@@ -329,8 +330,8 @@ void TestDebugString(
   tool::TagMap& tag_map = *statusor_tag_map.value();
   std::string debug_string = tag_map.DebugString();
   std::string short_string = tag_map.ShortDebugString();
-  LOG(INFO) << "ShortDebugString:\n" << short_string << "\n";
-  LOG(INFO) << "DebugString:\n" << debug_string << "\n\n";
+  ABSL_LOG(INFO) << "ShortDebugString:\n" << short_string << "\n";
+  ABSL_LOG(INFO) << "DebugString:\n" << debug_string << "\n\n";
 
   std::vector<std::string> actual_entries;
   for (const auto& field : tag_map.CanonicalEntries()) {

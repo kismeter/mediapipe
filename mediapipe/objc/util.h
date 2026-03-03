@@ -17,6 +17,7 @@
 
 #import <Accelerate/Accelerate.h>
 #import <CoreFoundation/CoreFoundation.h>
+#import <CoreGraphics/CoreGraphics.h>
 #import <CoreVideo/CoreVideo.h>
 
 #include "mediapipe/framework/formats/image_frame.h"
@@ -31,17 +32,18 @@
 /// call, and it must stay locked as long as the vImage_Buffer is in use.
 inline vImage_Buffer vImageForCVPixelBuffer(CVPixelBufferRef pixel_buffer) {
   return {.data = CVPixelBufferGetBaseAddress(pixel_buffer),
-          .width = CVPixelBufferGetWidth(pixel_buffer),
           .height = CVPixelBufferGetHeight(pixel_buffer),
+          .width = CVPixelBufferGetWidth(pixel_buffer),
           .rowBytes = CVPixelBufferGetBytesPerRow(pixel_buffer)};
 }
 
 /// Returns a vImage_Buffer describing the data inside the ImageFrame.
 inline vImage_Buffer vImageForImageFrame(const mediapipe::ImageFrame& frame) {
-  return {.data = (void*)frame.PixelData(),
-          .width = static_cast<vImagePixelCount>(frame.Width()),
-          .height = static_cast<vImagePixelCount>(frame.Height()),
-          .rowBytes = static_cast<size_t>(frame.WidthStep())};
+  return {
+      .data = reinterpret_cast<void*>(const_cast<uint8_t*>(frame.PixelData())),
+      .height = static_cast<vImagePixelCount>(frame.Height()),
+      .width = static_cast<vImagePixelCount>(frame.Width()),
+      .rowBytes = static_cast<size_t>(frame.WidthStep())};
 }
 
 /// Converts a grayscale image without alpha to BGRA format.
@@ -58,10 +60,12 @@ vImage_Error vImageRGBAToGray(const vImage_Buffer* src, vImage_Buffer* dst);
 vImage_Error vImageConvertCVPixelBuffers(CVPixelBufferRef src,
                                          CVPixelBufferRef dst);
 
-/// When storing a mediapipe::Packet* in a CVPixelBuffer's refcon, this can be
-/// used as a CVPixelBufferReleaseBytesCallback. This keeps the packet's data
-/// alive while the CVPixelBuffer is in use.
-void ReleaseMediaPipePacket(void* refcon, const void* base_address);
+// Create a CVPixelBuffer without using a pool. See pixel_buffer_pool_util.h
+// for creation functions that use pools.
+CVReturn CreateCVPixelBufferWithoutPool(int width, int height, OSType cv_format,
+                                        CVPixelBufferRef* out_buffer);
+absl::StatusOr<CFHolder<CVPixelBufferRef>> CreateCVPixelBufferWithoutPool(
+    int width, int height, OSType cv_format);
 
 /// Returns a CVPixelBuffer that references the data inside the packet. The
 /// packet must contain an ImageFrame. The CVPixelBuffer manages a copy of
@@ -78,6 +82,11 @@ absl::Status CreateCVPixelBufferForImageFramePacket(
 absl::Status CreateCVPixelBufferForImageFramePacket(
     const mediapipe::Packet& image_frame_packet, bool can_overwrite,
     CFHolder<CVPixelBufferRef>* out_buffer);
+absl::StatusOr<CFHolder<CVPixelBufferRef>> CreateCVPixelBufferCopyingImageFrame(
+    const mediapipe::ImageFrame& image_frame);
+absl::StatusOr<CFHolder<CVPixelBufferRef>> CreateCVPixelBufferForImageFrame(
+    std::shared_ptr<mediapipe::ImageFrame> image_frame,
+    bool can_overwrite = false);
 
 /// Creates a CVPixelBuffer with a copy of the contents of the CGImage.
 absl::Status CreateCVPixelBufferFromCGImage(

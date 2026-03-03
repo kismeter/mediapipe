@@ -212,6 +212,22 @@ message ProfilerConfig {
   // False specifies an event for each calculator invocation.
   // True specifies a separate event for each start and finish time.
   bool trace_log_instant_events = 17;
+
+  // Limits calculator-profile histograms to a subset of calculators.
+  string calculator_filter = 18;
+}
+
+// Configuration for the runtime info logger. It collects runtime information
+// and statistics about calculators and their input streams at the configured
+// capture rate and writes them to LOG(INFO). It can be used to inspect a
+// stalled graph by understanding which calculators are waiting for input
+// packets to triger their Process() method.
+message GraphRuntimeInfoConfig {
+  // If true, the runtime info logger is enabled and runs in the background.
+  bool enable_graph_runtime_info = 1;
+  // The period in seconds at which the runtime info logger is updated. The
+  // default value is 10 secods.
+  uint32 capture_period_msec = 2;
 }
 
 // Describes the topology and function of a MediaPipe Graph.  The graph of
@@ -318,6 +334,8 @@ message CalculatorGraphConfig {
     // The maximum number of invocations that can be executed in parallel.
     // If not specified, the limit is one invocation.
     int32 max_in_flight = 16;
+    // Defines an option value for this Node from graph options or packets.
+    repeated string option_value = 17;
     // DEPRECATED: For backwards compatibility we allow users to
     // specify the old name for "input_side_packet" in proto configs.
     // These are automatically converted to input_side_packets during
@@ -342,7 +360,8 @@ message CalculatorGraphConfig {
   // PacketGenerators can take as a input side packet the output side
   // packet of another PacketGenerator.  The graph of PacketGenerators
   // must be a directed acyclic graph.
-  repeated PacketGeneratorConfig packet_generator = 7;
+  // DEPRECATED: Use a Node to generate side packets.
+  repeated PacketGeneratorConfig packet_generator = 7 [deprecated = true];
   // Number of threads for running calculators in multithreaded mode.
   // If not specified, the scheduler will pick an appropriate number
   // of threads depending on the number of available processors.
@@ -377,7 +396,7 @@ message CalculatorGraphConfig {
   // is empty and no other nodes are running (to prevent possible deadlocks due
   // to a incorrectly specified value). This global parameter is set to 100
   // packets by default to enable pipelining. If any node indicates that it
-  // buffers packets before emitting them, then the max(node_buffer_size,
+  // buffers packets before emitting them, then the max(buffer_size_hint,
   // max_queue_size) is used. Set this parameter to -1 to disable throttling
   // (i.e. the graph will use as much memory as it requires). If not specified,
   // the limit is 100 packets.
@@ -386,6 +405,9 @@ message CalculatorGraphConfig {
   // calculators from running.  If false, max_queue_size for an input stream
   // is adjusted when throttling prevents all calculators from running.
   bool report_deadlock = 21;
+  // Enable the collection of runtime information and statistics about
+  // calculators and their input streams.
+  GraphRuntimeInfoConfig runtime_info = 22;
   // Config for this graph's InputStreamHandler.
   // If unspecified, the framework will automatically install the default
   // handler, which works as follows.

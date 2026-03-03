@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 licenses(["notice"])
 
 package(default_visibility = ["//visibility:private"])
@@ -42,7 +45,7 @@ android_binary(
         "//mediapipe/graphs/face_effect/data:glasses.binarypb",
         "//mediapipe/graphs/face_effect/data:glasses.pngblob",
         "//mediapipe/graphs/face_effect:face_effect_gpu.binarypb",
-        "//mediapipe/modules/face_detection:face_detection_front.tflite",
+        "//mediapipe/modules/face_detection:face_detection_short_range.tflite",
         "//mediapipe/modules/face_geometry/data:geometry_pipeline_metadata_detection.binarypb",
         "//mediapipe/modules/face_geometry/data:geometry_pipeline_metadata_landmarks.binarypb",
         "//mediapipe/modules/face_landmark:face_landmark.tflite",
@@ -60,12 +63,12 @@ android_binary(
         "flipFramesVertically": "True",
         "converterNumBuffers": "2",
     },
-    multidex = "native",
     deps = [
         ":mediapipe_jni_lib",
         "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/basic:basic_lib",
         "//mediapipe/framework/formats:matrix_data_java_proto_lite",
         "//mediapipe/java/com/google/mediapipe/framework:android_framework",
         "//mediapipe/modules/face_geometry/protos:face_geometry_java_proto_lite",
+        "//third_party:libc++_shared_lib",
     ],
 )

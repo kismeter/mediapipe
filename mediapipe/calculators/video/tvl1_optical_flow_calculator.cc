@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "absl/base/macros.h"
+#include "absl/log/absl_check.h"
 #include "absl/synchronization/mutex.h"
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/formats/image_frame.h"
@@ -22,6 +23,11 @@
 
 namespace mediapipe {
 namespace {
+
+constexpr char kBackwardFlowTag[] = "BACKWARD_FLOW";
+constexpr char kForwardFlowTag[] = "FORWARD_FLOW";
+constexpr char kSecondFrameTag[] = "SECOND_FRAME";
+constexpr char kFirstFrameTag[] = "FIRST_FRAME";
 
 // Checks that img1 and img2 have the same dimensions.
 bool ImageSizesMatch(const ImageFrame& img1, const ImageFrame& img2) {
@@ -94,32 +100,32 @@ class Tvl1OpticalFlowCalculator : public CalculatorBase {
 };
 
 absl::Status Tvl1OpticalFlowCalculator::GetContract(CalculatorContract* cc) {
-  if (!cc->Inputs().HasTag("FIRST_FRAME") ||
-      !cc->Inputs().HasTag("SECOND_FRAME")) {
+  if (!cc->Inputs().HasTag(kFirstFrameTag) ||
+      !cc->Inputs().HasTag(kSecondFrameTag)) {
     return absl::InvalidArgumentError(
         "Missing required input streams. Both FIRST_FRAME and SECOND_FRAME "
         "must be specified.");
   }
-  cc->Inputs().Tag("FIRST_FRAME").Set<ImageFrame>();
-  cc->Inputs().Tag("SECOND_FRAME").Set<ImageFrame>();
-  if (cc->Outputs().HasTag("FORWARD_FLOW")) {
-    cc->Outputs().Tag("FORWARD_FLOW").Set<OpticalFlowField>();
+  cc->Inputs().Tag(kFirstFrameTag).Set<ImageFrame>();
+  cc->Inputs().Tag(kSecondFrameTag).Set<ImageFrame>();
+  if (cc->Outputs().HasTag(kForwardFlowTag)) {
+    cc->Outputs().Tag(kForwardFlowTag).Set<OpticalFlowField>();
   }
-  if (cc->Outputs().HasTag("BACKWARD_FLOW")) {
-    cc->Outputs().Tag("BACKWARD_FLOW").Set<OpticalFlowField>();
+  if (cc->Outputs().HasTag(kBackwardFlowTag)) {
+    cc->Outputs().Tag(kBackwardFlowTag).Set<OpticalFlowField>();
   }
   return absl::OkStatus();
 }
 
 absl::Status Tvl1OpticalFlowCalculator::Open(CalculatorContext* cc) {
   {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     tvl1_computers_.emplace_back(cv::createOptFlow_DualTVL1());
   }
-  if (cc->Outputs().HasTag("FORWARD_FLOW")) {
+  if (cc->Outputs().HasTag(kForwardFlowTag)) {
     forward_requested_ = true;
   }
-  if (cc->Outputs().HasTag("BACKWARD_FLOW")) {
+  if (cc->Outputs().HasTag(kBackwardFlowTag)) {
     backward_requested_ = true;
   }
 
@@ -128,15 +134,15 @@ absl::Status Tvl1OpticalFlowCalculator::Open(CalculatorContext* cc) {
 
 absl::Status Tvl1OpticalFlowCalculator::Process(CalculatorContext* cc) {
   const ImageFrame& first_frame =
-      cc->Inputs().Tag("FIRST_FRAME").Value().Get<ImageFrame>();
+      cc->Inputs().Tag(kFirstFrameTag).Value().Get<ImageFrame>();
   const ImageFrame& second_frame =
-      cc->Inputs().Tag("SECOND_FRAME").Value().Get<ImageFrame>();
+      cc->Inputs().Tag(kSecondFrameTag).Value().Get<ImageFrame>();
   if (forward_requested_) {
     auto forward_optical_flow_field = absl::make_unique<OpticalFlowField>();
     MP_RETURN_IF_ERROR(CalculateOpticalFlow(first_frame, second_frame,
                                             forward_optical_flow_field.get()));
     cc->Outputs()
-        .Tag("FORWARD_FLOW")
+        .Tag(kForwardFlowTag)
         .Add(forward_optical_flow_field.release(), cc->InputTimestamp());
   }
   if (backward_requested_) {
@@ -144,7 +150,7 @@ absl::Status Tvl1OpticalFlowCalculator::Process(CalculatorContext* cc) {
     MP_RETURN_IF_ERROR(CalculateOpticalFlow(second_frame, first_frame,
                                             backward_optical_flow_field.get()));
     cc->Outputs()
-        .Tag("BACKWARD_FLOW")
+        .Tag(kBackwardFlowTag)
         .Add(backward_optical_flow_field.release(), cc->InputTimestamp());
   }
   return absl::OkStatus();
@@ -153,7 +159,7 @@ absl::Status Tvl1OpticalFlowCalculator::Process(CalculatorContext* cc) {
 absl::Status Tvl1OpticalFlowCalculator::CalculateOpticalFlow(
     const ImageFrame& current_frame, const ImageFrame& next_frame,
     OpticalFlowField* flow) {
-  CHECK(flow);
+  ABSL_CHECK(flow);
   if (!ImageSizesMatch(current_frame, next_frame)) {
     return tool::StatusInvalid("Images are different sizes.");
   }
@@ -164,7 +170,7 @@ absl::Status Tvl1OpticalFlowCalculator::CalculateOpticalFlow(
   // creates a new DenseOpticalFlow.
   cv::Ptr<cv::DenseOpticalFlow> tvl1_computer;
   {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     if (!tvl1_computers_.empty()) {
       std::swap(tvl1_computer, tvl1_computers_.front());
       tvl1_computers_.pop_front();
@@ -177,10 +183,10 @@ absl::Status Tvl1OpticalFlowCalculator::CalculateOpticalFlow(
   flow->Allocate(first.cols, first.rows);
   cv::Mat cv_flow(flow->mutable_flow_data());
   tvl1_computer->calc(first, second, cv_flow);
-  CHECK_EQ(flow->mutable_flow_data().data, cv_flow.data);
+  ABSL_CHECK_EQ(flow->mutable_flow_data().data, cv_flow.data);
   // Inserts the idle DenseOpticalFlow object back to the cache for reuse.
   {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     tvl1_computers_.push_back(tvl1_computer);
   }
   return absl::OkStatus();

@@ -15,7 +15,6 @@
 #include <utility>
 
 #include "absl/memory/memory.h"
-#include "mediapipe/framework/port/logging.h"
 #include "mediapipe/framework/port/ret_check.h"
 #include "mediapipe/framework/port/status.h"
 #include "mediapipe/framework/port/status_builder.h"
@@ -84,9 +83,8 @@ void GlContext::DestroyContext() {
   }
 }
 
-GlContext::ContextBinding GlContext::ThisContextBinding() {
+GlContext::ContextBinding GlContext::ThisContextBindingPlatform() {
   GlContext::ContextBinding result;
-  result.context_object = shared_from_this();
   result.context = context_;
   return result;
 }

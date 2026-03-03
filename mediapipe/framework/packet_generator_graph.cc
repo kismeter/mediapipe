@@ -97,7 +97,7 @@ absl::Status Generate(const ValidatedGraphConfig& validated_graph,
       validated_graph.Config().packet_generator(generator_index);
   const auto& generator_name = generator_config.packet_generator();
 
-  ASSIGN_OR_RETURN(
+  MP_ASSIGN_OR_RETURN(
       auto static_access,
       internal::StaticAccessToGeneratorRegistry::CreateByNameInNamespace(
           validated_graph.Package(), generator_name),
@@ -370,7 +370,8 @@ absl::Status PacketGeneratorGraph::Initialize(
 
 absl::Status PacketGeneratorGraph::RunGraphSetup(
     const std::map<std::string, Packet>& input_side_packets,
-    std::map<std::string, Packet>* output_side_packets) const {
+    std::map<std::string, Packet>* output_side_packets,
+    std::vector<int>* non_scheduled_generators) const {
   *output_side_packets = base_packets_;
   for (const std::pair<const std::string, Packet>& item : input_side_packets) {
     auto iter = output_side_packets->find(item.first);
@@ -380,7 +381,9 @@ absl::Status PacketGeneratorGraph::RunGraphSetup(
     }
     output_side_packets->insert(iter, item);
   }
-  std::vector<int> non_scheduled_generators;
+  std::vector<int> non_scheduled_generators_local;
+  if (!non_scheduled_generators)
+    non_scheduled_generators = &non_scheduled_generators_local;
 
   MP_RETURN_IF_ERROR(
       validated_graph_->CanAcceptSidePackets(input_side_packets));
@@ -389,11 +392,7 @@ absl::Status PacketGeneratorGraph::RunGraphSetup(
   MP_RETURN_IF_ERROR(
       validated_graph_->ValidateRequiredSidePackets(*output_side_packets));
   MP_RETURN_IF_ERROR(ExecuteGenerators(
-      output_side_packets, &non_scheduled_generators, /*initial=*/false));
-  RET_CHECK(non_scheduled_generators.empty())
-      << "Some Generators were unrunnable (validation should have failed).\n"
-         "Generator indexes: "
-      << absl::StrJoin(non_scheduled_generators, ", ");
+      output_side_packets, non_scheduled_generators, /*initial=*/false));
   return absl::OkStatus();
 }
 

@@ -14,6 +14,7 @@
 
 #include "mediapipe/framework/profiler/graph_tracer.h"
 
+#include <cstdint>
 #include <fstream>
 #include <functional>
 #include <map>
@@ -22,17 +23,16 @@
 #include <vector>
 
 #include "absl/flags/flag.h"
+#include "absl/log/absl_check.h"
 #include "absl/time/time.h"
 #include "mediapipe/framework/calculator.pb.h"
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/calculator_profile.pb.h"
 #include "mediapipe/framework/deps/clock.h"
-#include "mediapipe/framework/deps/message_matchers.h"
 #include "mediapipe/framework/port/advanced_proto_inc.h"
 #include "mediapipe/framework/port/file_helpers.h"
 #include "mediapipe/framework/port/gmock.h"
 #include "mediapipe/framework/port/gtest.h"
-#include "mediapipe/framework/port/integral_types.h"
 #include "mediapipe/framework/port/logging.h"
 #include "mediapipe/framework/port/parse_text_proto.h"
 #include "mediapipe/framework/port/status.h"
@@ -46,7 +46,7 @@
 namespace mediapipe {
 
 using PacketInfoMap =
-    ShardedMap<std::string, std::list<std::pair<int64, PacketInfo>>>;
+    ShardedMap<std::string, std::list<std::pair<int64_t, PacketInfo>>>;
 
 class GraphProfilerTestPeer {
  public:
@@ -333,7 +333,7 @@ TEST_F(GraphTracerTest, GraphTrace) {
 class GraphTracerE2ETest : public ::testing::Test {
  protected:
   void SetUpPassThroughGraph() {
-    CHECK(proto_ns::TextFormat::ParseFromString(R"(
+    ABSL_CHECK(proto_ns::TextFormat::ParseFromString(R"(
         input_stream: "input_0"
         node {
           calculator: "LambdaCalculator"
@@ -347,11 +347,11 @@ class GraphTracerE2ETest : public ::testing::Test {
           trace_enabled: true
         }
         )",
-                                                &graph_config_));
+                                                     &graph_config_));
   }
 
   void SetUpDemuxInFlightGraph() {
-    CHECK(proto_ns::TextFormat::ParseFromString(R"(
+    ABSL_CHECK(proto_ns::TextFormat::ParseFromString(R"(
         node {
           calculator: "LambdaCalculator"
           input_side_packet: 'callback_2'
@@ -405,7 +405,7 @@ class GraphTracerE2ETest : public ::testing::Test {
           trace_enabled: true
         }
         )",
-                                                &graph_config_));
+                                                     &graph_config_));
   }
 
   absl::Time ParseTime(const std::string& date_time_str) {
@@ -428,17 +428,17 @@ class GraphTracerE2ETest : public ::testing::Test {
 
   void SetUpRealClock() { clock_ = mediapipe::Clock::RealClock(); }
 
-  static Packet PacketAt(int64 ts) {
-    return Adopt(new int64(999)).At(Timestamp(ts));
+  static Packet PacketAt(int64_t ts) {
+    return Adopt(new int64_t(999)).At(Timestamp(ts));
   }
   static Packet None() { return Packet().At(Timestamp::OneOverPostStream()); }
   static bool IsNone(const Packet& packet) {
     return packet.Timestamp() == Timestamp::OneOverPostStream();
   }
   // Return the values of the timestamps of a vector of Packets.
-  static std::vector<int64> TimestampValues(
+  static std::vector<int64_t> TimestampValues(
       const std::vector<Packet>& packets) {
-    std::vector<int64> result;
+    std::vector<int64_t> result;
     for (const Packet& p : packets) {
       result.push_back(p.Timestamp().Value());
     }
@@ -551,7 +551,7 @@ class GraphTracerE2ETest : public ::testing::Test {
     };
 
     // A callback to control the source LambdaCalculator.
-    std::vector<std::pair<int64, Packet>> packets;
+    std::vector<std::pair<int64_t, Packet>> packets;
     ProcessFunction wait_2 = [&](const InputStreamShardSet& inputs,
                                  OutputStreamShardSet* outputs) {
       if (!packets.empty()) {
@@ -603,11 +603,11 @@ class GraphTracerE2ETest : public ::testing::Test {
 };
 
 // Initialize a TimeHistogram protobuf with some latency values.
-void FillHistogram(const std::vector<int64>& values, TimeHistogram* result) {
+void FillHistogram(const std::vector<int64_t>& values, TimeHistogram* result) {
   result->set_num_intervals(100);
   result->set_interval_size_usec(1000);
   result->mutable_count()->Resize(result->num_intervals(), 0);
-  for (int64 v : values) {
+  for (int64_t v : values) {
     result->set_total(result->total() + v);
     int bin = v / result->interval_size_usec();
     bin = std::min(bin, (int)result->num_intervals() - 1);
@@ -1054,8 +1054,8 @@ TEST_F(GraphTracerE2ETest, DemuxGraphLogFiles) {
                   calculator_name: "LambdaCalculator_1"
                   calculator_name: "FlowLimiterCalculator"
                   calculator_name: "RoundRobinDemuxCalculator"
-                  calculator_name: "LambdaCalculator_1"
-                  calculator_name: "LambdaCalculator"
+                  calculator_name: "LambdaCalculator_2"
+                  calculator_name: "LambdaCalculator_3"
                   calculator_name: "ImmediateMuxCalculator"
                   stream_name: ""
                   stream_name: "input_packets_0"
@@ -1199,14 +1199,14 @@ TEST_F(GraphTracerE2ETest, DemuxGraphLogFiles) {
                     output_stream: "OUTPUT:1:input_1"
                   }
                   node {
-                    name: "LambdaCalculator_1"
+                    name: "LambdaCalculator_2"
                     calculator: "LambdaCalculator"
                     input_stream: "input_0"
                     output_stream: "output_0"
                     input_side_packet: "callback_0"
                   }
                   node {
-                    name: "LambdaCalculator"
+                    name: "LambdaCalculator_3"
                     calculator: "LambdaCalculator"
                     input_stream: "input_1"
                     output_stream: "output_1"
@@ -1373,7 +1373,7 @@ TEST_F(GraphTracerE2ETest, GpuTaskTrace) {
 
 // Show that trace_enabled activates the GlContextProfiler.
 TEST_F(GraphTracerE2ETest, GpuTracing) {
-  CHECK(proto_ns::TextFormat::ParseFromString(R"(
+  ABSL_CHECK(proto_ns::TextFormat::ParseFromString(R"(
         input_stream: "input_buffer"
         input_stream: "render_data"
         output_stream: "annotated_buffer"
@@ -1387,7 +1387,7 @@ TEST_F(GraphTracerE2ETest, GpuTracing) {
           trace_enabled: true
         }
         )",
-                                              &graph_config_));
+                                                   &graph_config_));
 
   // Create the CalculatorGraph with only trace_enabled set.
   MP_ASSERT_OK(graph_.Initialize(graph_config_, {}));
@@ -1422,6 +1422,14 @@ TEST_F(GraphTracerE2ETest, DestructGraph) {
     MP_ASSERT_OK(graph.StartRun({}));
     // Destroy the graph immediately.
   }
+}
+
+TEST(TraceBuilderTest, EventDataIsExtracted) {
+  int value = 10;
+  Packet p = PointToForeign(&value);
+  TraceEvent event;
+  event.set_packet_data_id(&p);
+  EXPECT_EQ(event.event_data, reinterpret_cast<int64_t>(&value));
 }
 
 }  // namespace

@@ -14,18 +14,19 @@
 //
 // Simple calculators that are useful for test cases.
 
+#include <cstdint>
 #include <memory>
 #include <random>
 #include <string>
 #include <utility>
 
 #include "Eigen/Core"
+#include "absl/log/absl_check.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/deps/mathutil.h"
 #include "mediapipe/framework/formats/matrix.h"
-#include "mediapipe/framework/port/integral_types.h"
 #include "mediapipe/framework/port/logging.h"
 #include "mediapipe/framework/port/ret_check.h"
 #include "mediapipe/framework/port/status.h"
@@ -33,6 +34,19 @@
 #include "mediapipe/framework/test_calculators.pb.h"
 
 namespace mediapipe {
+
+constexpr char kOutTag[] = "OUT";
+constexpr char kClockTag[] = "CLOCK";
+constexpr char kSleepMicrosTag[] = "SLEEP_MICROS";
+constexpr char kCloseTag[] = "CLOSE";
+constexpr char kProcessTag[] = "PROCESS";
+constexpr char kOpenTag[] = "OPEN";
+constexpr char kTag[] = "";
+constexpr char kMeanTag[] = "MEAN";
+constexpr char kDataTag[] = "DATA";
+constexpr char kPairTag[] = "PAIR";
+constexpr char kLowTag[] = "LOW";
+constexpr char kHighTag[] = "HIGH";
 
 using RandomEngine = std::mt19937_64;
 
@@ -66,8 +80,8 @@ class IntSplitterPacketGenerator : public PacketGenerator {
       const PacketGeneratorOptions& extendable_options,  //
       PacketTypeSet* input_side_packets,                 //
       PacketTypeSet* output_side_packets) {
-    input_side_packets->Index(0).Set<uint64>();
-    output_side_packets->Index(0).Set<std::pair<uint32, uint32>>();
+    input_side_packets->Index(0).Set<uint64_t>();
+    output_side_packets->Index(0).Set<std::pair<uint32_t, uint32_t>>();
     return absl::OkStatus();
   }
 
@@ -75,11 +89,11 @@ class IntSplitterPacketGenerator : public PacketGenerator {
       const PacketGeneratorOptions& extendable_options,  //
       const PacketSet& input_side_packets,               //
       PacketSet* output_side_packets) {
-    uint64 value = input_side_packets.Index(0).Get<uint64>();
-    uint32 high = value >> 32;
-    uint32 low = value & 0xFFFFFFFF;
+    uint64_t value = input_side_packets.Index(0).Get<uint64_t>();
+    uint32_t high = value >> 32;
+    uint32_t low = value & 0xFFFFFFFF;
     output_side_packets->Index(0) =
-        Adopt(new std::pair<uint32, uint32>(high, low));
+        Adopt(new std::pair<uint32_t, uint32_t>(high, low));
     return absl::OkStatus();
   }
 };
@@ -94,10 +108,10 @@ class TaggedIntSplitterPacketGenerator : public PacketGenerator {
       const PacketGeneratorOptions& extendable_options,  //
       PacketTypeSet* input_side_packets,                 //
       PacketTypeSet* output_side_packets) {
-    input_side_packets->Index(0).Set<uint64>();
-    output_side_packets->Tag("HIGH").Set<uint32>();
-    output_side_packets->Tag("LOW").Set<uint32>();
-    output_side_packets->Tag("PAIR").Set<std::pair<uint32, uint32>>();
+    input_side_packets->Index(0).Set<uint64_t>();
+    output_side_packets->Tag(kHighTag).Set<uint32_t>();
+    output_side_packets->Tag(kLowTag).Set<uint32_t>();
+    output_side_packets->Tag(kPairTag).Set<std::pair<uint32_t, uint32_t>>();
     return absl::OkStatus();
   }
 
@@ -105,13 +119,13 @@ class TaggedIntSplitterPacketGenerator : public PacketGenerator {
       const PacketGeneratorOptions& extendable_options,  //
       const PacketSet& input_side_packets,               //
       PacketSet* output_side_packets) {
-    uint64 value = input_side_packets.Index(0).Get<uint64>();
-    uint32 high = value >> 32;
-    uint32 low = value & 0xFFFFFFFF;
-    output_side_packets->Tag("HIGH") = Adopt(new uint32(high));
-    output_side_packets->Tag("LOW") = Adopt(new uint32(low));
-    output_side_packets->Tag("PAIR") =
-        Adopt(new std::pair<uint32, uint32>(high, low));
+    uint64_t value = input_side_packets.Index(0).Get<uint64_t>();
+    uint32_t high = value >> 32;
+    uint32_t low = value & 0xFFFFFFFF;
+    output_side_packets->Tag(kHighTag) = Adopt(new uint32_t(high));
+    output_side_packets->Tag(kLowTag) = Adopt(new uint32_t(low));
+    output_side_packets->Tag(kPairTag) =
+        Adopt(new std::pair<uint32_t, uint32_t>(high, low));
     return absl::OkStatus();
   }
 };
@@ -133,7 +147,7 @@ class RangeCalculator : public CalculatorBase {
     cc->Outputs().Index(0).Set<int>();
     cc->Outputs().Index(1).Set<int>();
     cc->Outputs().Index(2).Set<double>();
-    cc->InputSidePackets().Index(0).Set<std::pair<uint32, uint32>>();
+    cc->InputSidePackets().Index(0).Set<std::pair<uint32_t, uint32_t>>();
     return absl::OkStatus();
   }
 
@@ -190,11 +204,11 @@ class RangeCalculator : public CalculatorBase {
 
   // Initializes this object.
   void Initialize(CalculatorContext* cc) {
-    CHECK(!initialized_);
+    ABSL_CHECK(!initialized_);
 
     cc->Options();  // Ensure Options() can be called here.
     std::tie(n_, k_) =
-        cc->InputSidePackets().Index(0).Get<std::pair<uint32, uint32>>();
+        cc->InputSidePackets().Index(0).Get<std::pair<uint32_t, uint32_t>>();
 
     index_ = 0;
     total_ = 0;
@@ -221,8 +235,8 @@ class StdDevCalculator : public CalculatorBase {
   StdDevCalculator() {}
 
   static absl::Status GetContract(CalculatorContract* cc) {
-    cc->Inputs().Tag("DATA").Set<int>();
-    cc->Inputs().Tag("MEAN").Set<double>();
+    cc->Inputs().Tag(kDataTag).Set<int>();
+    cc->Inputs().Tag(kMeanTag).Set<double>();
     cc->Outputs().Index(0).Set<int>();
     return absl::OkStatus();
   }
@@ -234,15 +248,15 @@ class StdDevCalculator : public CalculatorBase {
 
   absl::Status Process(CalculatorContext* cc) final {
     if (cc->InputTimestamp() == Timestamp::PreStream()) {
-      RET_CHECK(cc->Inputs().Tag("DATA").Value().IsEmpty());
-      RET_CHECK(!cc->Inputs().Tag("MEAN").Value().IsEmpty());
-      mean_ = cc->Inputs().Tag("MEAN").Get<double>();
+      RET_CHECK(cc->Inputs().Tag(kDataTag).Value().IsEmpty());
+      RET_CHECK(!cc->Inputs().Tag(kMeanTag).Value().IsEmpty());
+      mean_ = cc->Inputs().Tag(kMeanTag).Get<double>();
       initialized_ = true;
     } else {
       RET_CHECK(initialized_);
-      RET_CHECK(!cc->Inputs().Tag("DATA").Value().IsEmpty());
-      RET_CHECK(cc->Inputs().Tag("MEAN").Value().IsEmpty());
-      double diff = cc->Inputs().Tag("DATA").Get<int>() - mean_;
+      RET_CHECK(!cc->Inputs().Tag(kDataTag).Value().IsEmpty());
+      RET_CHECK(cc->Inputs().Tag(kMeanTag).Value().IsEmpty());
+      double diff = cc->Inputs().Tag(kDataTag).Get<int>() - mean_;
       cummulative_variance_ += diff * diff;
       ++count_;
     }
@@ -266,7 +280,7 @@ class StdDevCalculator : public CalculatorBase {
 REGISTER_CALCULATOR(StdDevCalculator);
 
 // A calculator that receives some number of input streams carrying ints.
-// Outputs, for each input timestamp, a space separated std::string containing
+// Outputs, for each input timestamp, a space separated string containing
 // the timestamp and all the inputs for that timestamp (Empty inputs
 // will be denoted with "empty"). Sets the header to be a space-separated
 // concatenation of the input stream headers.
@@ -355,7 +369,7 @@ REGISTER_CALCULATOR(SaverCalculator);
 
 #ifndef MEDIAPIPE_MOBILE
 // Source Calculator that produces matrices on the output stream with
-// each coefficient from a normal gaussian.  A std::string seed must be given
+// each coefficient from a normal gaussian.  A string seed must be given
 // as an input side packet.
 class RandomMatrixCalculator : public CalculatorBase {
  public:
@@ -367,10 +381,10 @@ class RandomMatrixCalculator : public CalculatorBase {
 
   absl::Status Open(CalculatorContext* cc) override {
     auto& options = cc->Options<RandomMatrixCalculatorOptions>();
-    CHECK_LT(0, options.timestamp_step());
-    CHECK_LT(0, options.rows());
-    CHECK_LT(0, options.cols());
-    CHECK_LT(options.start_timestamp(), options.limit_timestamp());
+    ABSL_CHECK_LT(0, options.timestamp_step());
+    ABSL_CHECK_LT(0, options.rows());
+    ABSL_CHECK_LT(0, options.cols());
+    ABSL_CHECK_LT(options.start_timestamp(), options.limit_timestamp());
 
     current_timestamp_ = Timestamp(options.start_timestamp());
     cc->Outputs().Index(0).SetNextTimestampBound(current_timestamp_);
@@ -434,13 +448,13 @@ class MeanAndCovarianceCalculator : public CalculatorBase {
   absl::Status Process(CalculatorContext* cc) override {
     const Eigen::MatrixXd sample =
         cc->Inputs().Index(0).Get<Matrix>().cast<double>();
-    CHECK_EQ(1, sample.cols());
+    ABSL_CHECK_EQ(1, sample.cols());
     if (num_samples_ == 0) {
       rows_ = sample.rows();
       sum_vector_ = Eigen::VectorXd::Zero(rows_);
       outer_product_sum_ = Eigen::MatrixXd::Zero(rows_, rows_);
     } else {
-      CHECK_EQ(sample.rows(), rows_);
+      ABSL_CHECK_EQ(sample.rows(), rows_);
     }
     sum_vector_ += sample;
     outer_product_sum_ += sample * sample.transpose();
@@ -475,7 +489,7 @@ class MeanAndCovarianceCalculator : public CalculatorBase {
  private:
   Eigen::VectorXd sum_vector_;
   Eigen::MatrixXd outer_product_sum_;
-  int64 num_samples_;
+  int64_t num_samples_;
   int rows_;
 };
 REGISTER_CALCULATOR(MeanAndCovarianceCalculator);
@@ -564,8 +578,8 @@ class LambdaCalculator : public CalculatorBase {
          id < cc->Outputs().EndId(); ++id) {
       cc->Outputs().Get(id).SetAny();
     }
-    if (cc->InputSidePackets().HasTag("") > 0) {
-      cc->InputSidePackets().Tag("").Set<ProcessFunction>();
+    if (cc->InputSidePackets().HasTag(kTag) > 0) {
+      cc->InputSidePackets().Tag(kTag).Set<ProcessFunction>();
     }
     for (const std::string& tag : {"OPEN", "PROCESS", "CLOSE"}) {
       if (cc->InputSidePackets().HasTag(tag)) {
@@ -576,24 +590,24 @@ class LambdaCalculator : public CalculatorBase {
   }
 
   absl::Status Open(CalculatorContext* cc) final {
-    if (cc->InputSidePackets().HasTag("OPEN")) {
+    if (cc->InputSidePackets().HasTag(kOpenTag)) {
       return GetContextFn(cc, "OPEN")(cc);
     }
     return absl::OkStatus();
   }
 
   absl::Status Process(CalculatorContext* cc) final {
-    if (cc->InputSidePackets().HasTag("PROCESS")) {
+    if (cc->InputSidePackets().HasTag(kProcessTag)) {
       return GetContextFn(cc, "PROCESS")(cc);
     }
-    if (cc->InputSidePackets().HasTag("") > 0) {
+    if (cc->InputSidePackets().HasTag(kTag) > 0) {
       return GetProcessFn(cc, "")(cc->Inputs(), &cc->Outputs());
     }
     return absl::OkStatus();
   }
 
   absl::Status Close(CalculatorContext* cc) final {
-    if (cc->InputSidePackets().HasTag("CLOSE")) {
+    if (cc->InputSidePackets().HasTag(kCloseTag)) {
       return GetContextFn(cc, "CLOSE")(cc);
     }
     return absl::OkStatus();
@@ -645,17 +659,18 @@ class PassThroughWithSleepCalculator : public CalculatorBase {
   static absl::Status GetContract(CalculatorContract* cc) {
     cc->Inputs().Index(0).Set<int>();
     cc->Outputs().Index(0).SetSameAs(&cc->Inputs().Index(0));
-    cc->InputSidePackets().Tag("SLEEP_MICROS").Set<int>();
-    cc->InputSidePackets().Tag("CLOCK").Set<std::shared_ptr<Clock>>();
+    cc->InputSidePackets().Tag(kSleepMicrosTag).Set<int>();
+    cc->InputSidePackets().Tag(kClockTag).Set<std::shared_ptr<Clock>>();
     return absl::OkStatus();
   }
   absl::Status Open(CalculatorContext* cc) final {
     cc->SetOffset(TimestampDiff(0));
-    sleep_micros_ = cc->InputSidePackets().Tag("SLEEP_MICROS").Get<int>();
+    sleep_micros_ = cc->InputSidePackets().Tag(kSleepMicrosTag).Get<int>();
     if (sleep_micros_ < 0) {
       return absl::InternalError("SLEEP_MICROS should be >= 0");
     }
-    clock_ = cc->InputSidePackets().Tag("CLOCK").Get<std::shared_ptr<Clock>>();
+    clock_ =
+        cc->InputSidePackets().Tag(kClockTag).Get<std::shared_ptr<Clock>>();
     return absl::OkStatus();
   }
   absl::Status Process(CalculatorContext* cc) final {
@@ -678,8 +693,8 @@ class MultiplyIntCalculator : public CalculatorBase {
     cc->Inputs().Index(0).Set<int>();
     cc->Inputs().Index(1).SetSameAs(&cc->Inputs().Index(0));
     // cc->Outputs().Index(0).SetSameAs(&cc->Inputs().Index(0));
-    RET_CHECK(cc->Outputs().HasTag("OUT"));
-    cc->Outputs().Tag("OUT").SetSameAs(&cc->Inputs().Index(0));
+    RET_CHECK(cc->Outputs().HasTag(kOutTag));
+    cc->Outputs().Tag(kOutTag).SetSameAs(&cc->Inputs().Index(0));
     return absl::OkStatus();
   }
   absl::Status Open(CalculatorContext* cc) final {
@@ -689,7 +704,7 @@ class MultiplyIntCalculator : public CalculatorBase {
   absl::Status Process(CalculatorContext* cc) final {
     int x = cc->Inputs().Index(0).Value().Get<int>();
     int y = cc->Inputs().Index(1).Value().Get<int>();
-    cc->Outputs().Tag("OUT").Add(new int(x * y), cc->InputTimestamp());
+    cc->Outputs().Tag(kOutTag).Add(new int(x * y), cc->InputTimestamp());
     return absl::OkStatus();
   }
 };

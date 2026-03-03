@@ -1,8 +1,9 @@
 ---
-layout: default
+layout: forward
+target: https://developers.google.com/mediapipe/solutions/vision/image_segmenter/
 title: Hair Segmentation
-parent: Solutions
-nav_order: 7
+parent: MediaPipe Legacy Solutions
+nav_order: 8
 ---
 
 # MediaPipe Hair Segmentation
@@ -18,7 +19,15 @@ nav_order: 7
 </details>
 ---
 
-![hair_segmentation_android_gpu_gif](../images/mobile/hair_segmentation_android_gpu.gif)
+**Attention:** *Thank you for your interest in MediaPipe Solutions.
+As of April 4, 2023, this solution was upgraded to a new MediaPipe
+Solution. For more information, see the
+[MediaPipe Solutions](https://developers.google.com/mediapipe/solutions/vision/image_segmenter/)
+site.*
+
+----
+
+![hair_segmentation_android_gpu_gif](https://mediapipe.dev/images/mobile/hair_segmentation_android_gpu.gif)
 
 ## Example Apps
 
@@ -34,10 +43,10 @@ to visualize its associated subgraphs, please see
 ### Mobile
 
 *   Graph:
-    [`mediapipe/graphs/hair_segmentation/hair_segmentation_mobile_gpu.pbtxt`](https://github.com/google/mediapipe/tree/master/mediapipe/graphs/hair_segmentation/hair_segmentation_mobile_gpu.pbtxt)
+    [`mediapipe/graphs/hair_segmentation/hair_segmentation_mobile_gpu.pbtxt`](https://github.com/google-ai-edge/mediapipe/tree/master/mediapipe/graphs/hair_segmentation/hair_segmentation_mobile_gpu.pbtxt)
 *   Android target:
     [(or download prebuilt ARM64 APK)](https://drive.google.com/open?id=1mmLtyL8IRfCUbqqu0-E-Hgjr_e6P3XAy)
-    [`mediapipe/examples/android/src/java/com/google/mediapipe/apps/hairsegmentationgpu:hairsegmentationgpu`](https://github.com/google/mediapipe/tree/master/mediapipe/examples/android/src/java/com/google/mediapipe/apps/hairsegmentationgpu/BUILD)
+    [`mediapipe/examples/android/src/java/com/google/mediapipe/apps/hairsegmentationgpu:hairsegmentationgpu`](https://github.com/google-ai-edge/mediapipe/tree/master/mediapipe/examples/android/src/java/com/google/mediapipe/apps/hairsegmentationgpu/BUILD)
 *   iOS target: Not available
 
 ### Desktop
@@ -45,13 +54,20 @@ to visualize its associated subgraphs, please see
 *   Running on CPU: Not available
 *   Running on GPU
     *   Graph:
-        [`mediapipe/graphs/hair_segmentation/hair_segmentation_mobile_gpu.pbtxt`](https://github.com/google/mediapipe/tree/master/mediapipe/graphs/hair_segmentation/hair_segmentation_mobile_gpu.pbtxt)
+        [`mediapipe/graphs/hair_segmentation/hair_segmentation_mobile_gpu.pbtxt`](https://github.com/google-ai-edge/mediapipe/tree/master/mediapipe/graphs/hair_segmentation/hair_segmentation_mobile_gpu.pbtxt)
     *   Target:
-        [`mediapipe/examples/desktop/hair_segmentation:hair_segmentation_gpu`](https://github.com/google/mediapipe/tree/master/mediapipe/examples/desktop/hair_segmentation/BUILD)
+        [`mediapipe/examples/desktop/hair_segmentation:hair_segmentation_gpu`](https://github.com/google-ai-edge/mediapipe/tree/master/mediapipe/examples/desktop/hair_segmentation/BUILD)
 
 ### Web
 
-Please refer to [these instructions](../index.md#mediapipe-on-the-web).
+Use [this link](https://viz.mediapipe.dev/demo/hair_segmentation) to load a demo
+in the MediaPipe Visualizer, and over there click the "Runner" icon in the top
+bar like shown below. The demos use your webcam video as input, which is
+processed all locally in real-time and never leaves your device. Please see
+[MediaPipe on the Web](https://developers.googleblog.com/2020/01/mediapipe-on-web.html)
+in Google Developers Blog for details.
+
+![visualizer_runner](https://mediapipe.dev/images/visualizer_runner.png)
 
 ## Resources
 

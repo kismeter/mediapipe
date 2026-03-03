@@ -15,6 +15,8 @@
 #ifndef MEDIAPIPE_FRAMEWORK_PROFILER_MEDIAPIPE_PROFILER_STUB_H_
 #define MEDIAPIPE_FRAMEWORK_PROFILER_MEDIAPIPE_PROFILER_STUB_H_
 
+#include <cstdint>
+
 #include "mediapipe/framework/port/status.h"
 #include "mediapipe/framework/timestamp.h"
 
@@ -71,8 +73,11 @@ class TraceEvent {
   inline TraceEvent& set_packet_data_id(const Packet* packet) { return *this; }
   inline TraceEvent& set_thread_id(int thread_id) { return *this; }
   inline TraceEvent& set_is_finish(bool is_finish) { return *this; }
-  inline TraceEvent& set_event_data(int64 data) { return *this; }
+  inline TraceEvent& set_event_data(int64_t data) { return *this; }
 };
+
+// GraphProfiler::CaptureProfile option, see the method for details.
+enum class PopulateGraphConfig { kNo, kFull };
 
 // Empty implementation of ProfilingContext to be used in place of the
 // GraphProfiler when the main implementation is disabled.
@@ -85,6 +90,12 @@ class GraphProfilerStub {
       std::vector<CalculatorProfile>*) const {
     return absl::OkStatus();
   }
+  absl::Status CaptureProfile(
+      GraphProfile* result,
+      PopulateGraphConfig populate_config = PopulateGraphConfig::kNo) {
+    return absl::OkStatus();
+  }
+  inline absl::Status WriteProfile() { return absl::OkStatus(); }
   inline void Pause() {}
   inline void Resume() {}
   inline void Reset() {}

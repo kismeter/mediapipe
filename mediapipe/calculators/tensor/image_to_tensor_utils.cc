@@ -15,10 +15,22 @@
 #include "mediapipe/calculators/tensor/image_to_tensor_utils.h"
 
 #include <array>
+#include <cmath>
+#include <memory>
+#include <utility>
 
+#include "absl/status/statusor.h"
 #include "absl/types/optional.h"
+#include "mediapipe/framework/api2/packet.h"
+#include "mediapipe/framework/calculator_framework.h"
+#include "mediapipe/framework/formats/image.h"
+#include "mediapipe/framework/formats/image_frame.h"
+#include "mediapipe/framework/formats/tensor.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/statusor.h"
+#include "mediapipe/framework/port/status_macros.h"
+#if !MEDIAPIPE_DISABLE_GPU
+#include "mediapipe/gpu/gpu_buffer.h"
+#endif  // !MEDIAPIPE_DISABLE_GPU
 
 namespace mediapipe {
 
@@ -90,7 +102,7 @@ absl::StatusOr<ValueTransformation> GetValueRangeTransformation(
 
 void GetRotatedSubRectToRectTransformMatrix(const RotatedRect& sub_rect,
                                             int rect_width, int rect_height,
-                                            bool flip_horizontaly,
+                                            bool flip_horizontally,
                                             std::array<float, 16>* matrix_ptr) {
   std::array<float, 16>& matrix = *matrix_ptr;
   // The resulting matrix is multiplication of below commented out matrices:
@@ -116,7 +128,7 @@ void GetRotatedSubRectToRectTransformMatrix(const RotatedRect& sub_rect,
   // {0.0f, 0.0f,    a, 0.0f}
   // {0.0f, 0.0f, 0.0f, 1.0f}
 
-  const float flip = flip_horizontaly ? -1 : 1;
+  const float flip = flip_horizontally ? -1 : 1;
   // Matrix for optional horizontal flip around middle of output image.
   // { fl  , 0.0f, 0.0f, 0.0f}
   // { 0.0f, 1.0f, 0.0f, 0.0f}
@@ -175,13 +187,13 @@ void GetRotatedSubRectToRectTransformMatrix(const RotatedRect& sub_rect,
 
 void GetTransposedRotatedSubRectToRectTransformMatrix(
     const RotatedRect& sub_rect, int rect_width, int rect_height,
-    bool flip_horizontaly, std::array<float, 16>* matrix_ptr) {
+    bool flip_horizontally, std::array<float, 16>* matrix_ptr) {
   std::array<float, 16>& matrix = *matrix_ptr;
   // See comments in GetRotatedSubRectToRectTransformMatrix for detailed
   // calculations.
   const float a = sub_rect.width;
   const float b = sub_rect.height;
-  const float flip = flip_horizontaly ? -1 : 1;
+  const float flip = flip_horizontally ? -1 : 1;
   const float c = std::cos(sub_rect.rotation);
   const float d = std::sin(sub_rect.rotation);
   const float e = sub_rect.center_x;
@@ -213,5 +225,80 @@ void GetTransposedRotatedSubRectToRectTransformMatrix(
   matrix[14] = 0.0f;
   matrix[15] = 1.0f;
 }
+
+BorderMode GetBorderMode(
+    const mediapipe::ImageToTensorCalculatorOptions::BorderMode& mode) {
+  switch (mode) {
+    case mediapipe::
+        ImageToTensorCalculatorOptions_BorderMode_BORDER_UNSPECIFIED:
+      return BorderMode::kReplicate;
+    case mediapipe::ImageToTensorCalculatorOptions_BorderMode_BORDER_ZERO:
+      return BorderMode::kZero;
+    case mediapipe::ImageToTensorCalculatorOptions_BorderMode_BORDER_REPLICATE:
+      return BorderMode::kReplicate;
+  }
+}
+
+Tensor::ElementType GetOutputTensorType(bool uses_gpu,
+                                        const OutputTensorParams& params) {
+  if (!uses_gpu) {
+    if (params.is_float_output) {
+      return Tensor::ElementType::kFloat32;
+    }
+    if (params.range_min < 0) {
+      return Tensor::ElementType::kInt8;
+    } else {
+      return Tensor::ElementType::kUInt8;
+    }
+  }
+  // Always use float32 when GPU is enabled.
+  return Tensor::ElementType::kFloat32;
+}
+
+int GetNumOutputChannels(const mediapipe::Image& image) {
+#if !MEDIAPIPE_DISABLE_GPU
+#if MEDIAPIPE_METAL_ENABLED
+  if (image.UsesGpu()) {
+    return 4;
+  }
+#endif  // MEDIAPIPE_METAL_ENABLED
+#endif  // !MEDIAPIPE_DISABLE_GPU
+  // TODO: Add a unittest here to test the behavior on GPU, i.e.
+  // failure.
+  // Only output channel == 1 when running on CPU and the input image channel
+  // is 1. Ideally, we want to also support GPU for output channel == 1. But
+  // setting this on the safer side to prevent unintentional failure.
+  if (!image.UsesGpu() && image.channels() == 1) {
+    return 1;
+  }
+  return 3;
+}
+
+absl::StatusOr<std::shared_ptr<const mediapipe::Image>> GetInputImage(
+    const api2::Packet<api2::OneOf<Image, mediapipe::ImageFrame>>&
+        image_packet) {
+  return image_packet.Visit(
+      [&image_packet](const mediapipe::Image&) {
+        return image_packet.Share<mediapipe::Image>();
+      },
+      [&image_packet](const mediapipe::ImageFrame&)
+          -> absl::StatusOr<std::shared_ptr<const mediapipe::Image>> {
+        MP_ASSIGN_OR_RETURN(
+            std::shared_ptr<const mediapipe::ImageFrame> image_frame,
+            image_packet.Share<mediapipe::ImageFrame>());
+        return std::make_shared<const mediapipe::Image>(
+            std::const_pointer_cast<mediapipe::ImageFrame>(
+                std::move(image_frame)));
+      });
+}
+
+#if !MEDIAPIPE_DISABLE_GPU
+absl::StatusOr<std::shared_ptr<const mediapipe::Image>> GetInputImage(
+    const api2::Packet<mediapipe::GpuBuffer>& image_gpu_packet) {
+  // A shallow copy is okay since the resulting 'image' object is local in
+  // Process(), and thus never outlives 'input'.
+  return std::make_shared<const mediapipe::Image>(image_gpu_packet.Get());
+}
+#endif  // !MEDIAPIPE_DISABLE_GPU
 
 }  // namespace mediapipe

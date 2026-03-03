@@ -1,3 +1,5 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("//mediapipe/framework/tool:mediapipe_graph.bzl", "mediapipe_binary_graph")
 
 package(default_visibility = ["//visibility:private"])
@@ -11,6 +13,7 @@ cc_library(
         "//mediapipe:apple": ["CFHolder.h"],
         "//conditions:default": [],
     }),
+    features = ["layering_check"],
     visibility = ["//mediapipe/framework:mediapipe_internal"],
 )
 
@@ -18,9 +21,15 @@ cc_library(
     name = "util",
     srcs = ["util.cc"],
     hdrs = ["util.h"],
-    features = ["-parse_headers"],
+    features = [
+        "-parse_headers",
+        "layering_check",
+    ],
     linkopts = [
         "-framework Accelerate",
+        "-framework CoreFoundation",
+        "-framework CoreGraphics",
+        "-framework CoreVideo",
     ],
     visibility = ["//mediapipe/framework:mediapipe_internal"],
     deps = [
@@ -32,6 +41,8 @@ cc_library(
         "//mediapipe/framework/port:source_location",
         "//mediapipe/framework/port:status",
         "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/log:absl_check",
+        "@com_google_absl//absl/log:absl_log",
         "@com_google_absl//absl/memory",
     ],
 )
@@ -43,9 +54,9 @@ objc_library(
 )
 
 MEDIAPIPE_IOS_SRCS = [
-    "MPPGraph.mm",
-    "MPPTimestampConverter.mm",
-    "NSError+util_status.mm",
+    "MPPGraph.cc",
+    "MPPTimestampConverter.cc",
+    "NSError+util_status.cc",
 ]
 
 MEDIAPIPE_IOS_HDRS = [
@@ -54,19 +65,17 @@ MEDIAPIPE_IOS_HDRS = [
     "NSError+util_status.h",
 ]
 
-objc_library(
+cc_library(
     name = "mediapipe_framework_ios",
     srcs = MEDIAPIPE_IOS_SRCS,
     hdrs = MEDIAPIPE_IOS_HDRS,
     copts = [
+        "-x objective-c++",
+        "-fobjc-arc",  # enable reference-counting
         "-Wno-shorten-64-to-32",
-        "-std=c++17",
     ],
-    sdk_frameworks = [
-        # Needed for OpenCV.
-        "Accelerate",
-    ],
-    visibility = ["//mediapipe/framework:mediapipe_internal"],
+    # This build rule is public to allow external customers to build their own iOS apps.
+    visibility = ["//visibility:public"],
     deps = [
         ":CFHolder",
         ":util",
@@ -79,19 +88,23 @@ objc_library(
         "//mediapipe/framework/port:status",
         "//mediapipe/framework/port:statusor",
         "//mediapipe/framework/port:threadpool",
-        "//mediapipe/gpu:MPPGraphGPUData",
         "//mediapipe/gpu:gl_base",
         "//mediapipe/gpu:gpu_buffer",
         "//mediapipe/gpu:gpu_shared_data_internal",
         "//mediapipe/gpu:graph_support",
+        "//mediapipe/gpu:metal_shared_resources",
         "//mediapipe/gpu:pixel_buffer_pool_util",
         "//mediapipe/util:cpu_util",
+        "//third_party/apple_frameworks:AVFoundation",
+        "//third_party/apple_frameworks:Accelerate",
+        "//third_party/apple_frameworks:CoreMedia",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
         "@google_toolbox_for_mac//:GTM_Defines",
     ],
+    alwayslink = 1,
 )
 
 objc_library(
@@ -116,10 +129,15 @@ objc_library(
         ],
         "//conditions:default": [],
     }),
-    sdk_frameworks = [
-        "CoreVideo",
+    # This build rule is public to allow external customers to build their own iOS apps.
+    visibility = ["//visibility:public"],
+    deps = [
+        "//third_party/apple_frameworks:AVFoundation",
+        "//third_party/apple_frameworks:CoreAudio",
+        "//third_party/apple_frameworks:CoreVideo",
+        "//third_party/apple_frameworks:Foundation",
+        "//third_party/apple_frameworks:MediaToolbox",
     ],
-    visibility = ["//mediapipe/framework:mediapipe_internal"],
 )
 
 objc_library(
@@ -132,14 +150,15 @@ objc_library(
     ],
     copts = [
         "-Wno-shorten-64-to-32",
-        "-std=c++17",
     ],
     visibility = ["//mediapipe/framework:mediapipe_internal"],
     deps = [
         ":mediapipe_framework_ios",
-        "//mediapipe/gpu:gl_calculator_helper_ios",
+        "//mediapipe/gpu:gl_calculator_helper",
         "//mediapipe/gpu:gl_quad_renderer",
         "//mediapipe/gpu:gl_simple_shaders",
+        "//third_party/apple_frameworks:Foundation",
+        "//third_party/apple_frameworks:GLKit",
     ],
 )
 
@@ -154,11 +173,14 @@ objc_library(
     copts = [
         "-Wno-shorten-64-to-32",
     ],
-    visibility = ["//mediapipe/framework:mediapipe_internal"],
+    # This build rule is public to allow external customers to build their own iOS apps.
+    visibility = ["//visibility:public"],
     deps = [
         ":mediapipe_framework_ios",
         ":mediapipe_gl_view_renderer",
-        "//mediapipe/gpu:gl_calculator_helper_ios",
+        "//mediapipe/gpu:gl_calculator_helper",
+        "//third_party/apple_frameworks:Foundation",
+        "//third_party/apple_frameworks:GLKit",
     ],
 )
 
@@ -172,21 +194,34 @@ objc_library(
     ],
     copts = [
         "-Wno-shorten-64-to-32",
-        "-std=c++17",
-    ],
-    sdk_frameworks = [
-        "CoreVideo",
     ],
     visibility = ["//mediapipe/framework:mediapipe_internal"],
     deps = [
         ":mediapipe_framework_ios",
+        "//third_party/apple_frameworks:CoreVideo",
+        "//third_party/apple_frameworks:Foundation",
         "@com_google_absl//absl/strings",
     ],
 )
 
 objc_library(
+    name = "mediapipe_audio_util",
+    srcs = ["MediaPipeAudioUtil.mm"],
+    hdrs = ["MediaPipeAudioUtil.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//mediapipe/framework/formats:matrix",
+        "//mediapipe/framework/port:statusor",
+        "//third_party/apple_frameworks:AVFoundation",
+        "//third_party/apple_frameworks:CoreAudio",
+        "//third_party/apple_frameworks:CoreMedia",
+        "@eigen//:eigen3",
+    ],
+)
+
+objc_library(
     name = "MPPGraphTestBase",
-    testonly = 1,
+    testonly = True,
     srcs = [
         "MPPGraphTestBase.mm",
     ],
@@ -195,18 +230,6 @@ objc_library(
     ],
     copts = [
         "-Wno-shorten-64-to-32",
-        "-std=c++17",
-    ],
-    sdk_frameworks = [
-        "Accelerate",
-        "AVFoundation",
-        "CoreVideo",
-        "CoreGraphics",
-        "CoreMedia",
-        "GLKit",
-        "OpenGLES",
-        "QuartzCore",
-        "UIKit",
     ],
     visibility = ["//mediapipe/framework:mediapipe_internal"],
     deps = [
@@ -214,40 +237,51 @@ objc_library(
         ":Weakify",
         ":mediapipe_framework_ios",
         "//mediapipe/framework:calculator_framework",
+        "//third_party/apple_frameworks:AVFoundation",
+        "//third_party/apple_frameworks:Accelerate",
+        "//third_party/apple_frameworks:CoreGraphics",
+        "//third_party/apple_frameworks:CoreMedia",
+        "//third_party/apple_frameworks:CoreVideo",
+        "//third_party/apple_frameworks:GLKit",
+        "//third_party/apple_frameworks:OpenGLES",
+        "//third_party/apple_frameworks:QuartzCore",
+        "//third_party/apple_frameworks:UIKit",
     ],
 )
 
 objc_library(
     name = "mediapipe_framework_ios_testLib",
-    testonly = 1,
+    testonly = True,
     srcs = [
         "CFHolderTests.mm",
+        "MPPDisplayLinkWeakTargetTests.mm",
         "MPPGraphTests.mm",
+        "MediaPipeAudioUtilTests.mm",
     ],
     copts = [
         "-Wno-shorten-64-to-32",
-        "-std=c++17",
     ],
     data = [
         "testdata/googlelogo_color_272x92dp.png",
-    ],
-    sdk_frameworks = [
-        "Accelerate",
-        "AVFoundation",
-        "CoreVideo",
-        "CoreGraphics",
-        "CoreMedia",
-        "GLKit",
-        "QuartzCore",
-        "UIKit",
     ],
     visibility = ["//mediapipe/framework:mediapipe_internal"],
     deps = [
         ":CGImageRefUtils",
         ":MPPGraphTestBase",
         ":Weakify",
+        ":mediapipe_audio_util",
         ":mediapipe_framework_ios",
+        ":mediapipe_input_sources_ios",
         "//mediapipe/calculators/core:pass_through_calculator",
+        "//third_party/apple_frameworks:AVFoundation",
+        "//third_party/apple_frameworks:Accelerate",
+        "//third_party/apple_frameworks:CoreAudio",
+        "//third_party/apple_frameworks:CoreGraphics",
+        "//third_party/apple_frameworks:CoreMedia",
+        "//third_party/apple_frameworks:CoreVideo",
+        "//third_party/apple_frameworks:GLKit",
+        "//third_party/apple_frameworks:QuartzCore",
+        "//third_party/apple_frameworks:UIKit",
     ],
 )
 

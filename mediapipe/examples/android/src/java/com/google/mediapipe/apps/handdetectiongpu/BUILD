@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 licenses(["notice"])
 
 package(default_visibility = ["//visibility:private"])
@@ -37,7 +40,7 @@ android_binary(
     srcs = glob(["*.java"]),
     assets = [
         "//mediapipe/graphs/hand_tracking:hand_detection_mobile_gpu.binarypb",
-        "//mediapipe/modules/palm_detection:palm_detection.tflite",
+        "//mediapipe/modules/palm_detection:palm_detection_full.tflite",
     ],
     assets_dir = "",
     manifest = "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/basic:AndroidManifest.xml",
@@ -52,9 +55,9 @@ android_binary(
         "flipFramesVertically": "True",
         "converterNumBuffers": "2",
     },
-    multidex = "native",
     deps = [
         ":mediapipe_jni_lib",
         "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/basic:basic_lib",
+        "//third_party:libc++_shared_lib",
     ],
 )

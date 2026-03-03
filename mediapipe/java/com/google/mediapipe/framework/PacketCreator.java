@@ -26,6 +26,30 @@ import java.nio.FloatBuffer;
  * <p>This class provides a set of functions to create basic mediapipe packet types.
  */
 public class PacketCreator {
+
+  /** Sync mode to use when creating a GpuBuffer packet. */
+  public static enum SyncMode {
+    // External texture is already up-to-date and can be used on a shared context
+    // as is (e.g. prior glFinish call) or there's just a single GL context used
+    // for both external textures and MediaPipe graph.
+    NO_SYNC(0),
+    // MediaPipe graph has a dedicated GL context(s) and external texture must be
+    // efficiently synchronized using GL sync object.
+    SYNC(1),
+    // MediaPipe graph has a dedicated GL context(s) and external texture can be
+    // synchronized using GL sync object or glFinish or can be skipped
+    // alltogether.
+    MAYBE_SYNC_OR_FINISH(2);
+
+    private final int value;
+
+    SyncMode(int value) {
+      this.value = value;
+    }
+  }
+
+  // Locally declared GL constant so that we do not have any platform dependencies.
+  private static final int GL_RGBA = 0x1908;
   protected Graph mediapipeGraph;
 
   public PacketCreator(Graph context) {
@@ -55,7 +79,11 @@ public class PacketCreator {
   public Packet createRgbImage(ByteBuffer buffer, int width, int height) {
     int widthStep = (((width * 3) + 3) / 4) * 4;
     if (widthStep * height != buffer.capacity()) {
-      throw new RuntimeException("The size of the buffer should be: " + widthStep * height);
+      throw new IllegalArgumentException(
+          "The size of the buffer should be: "
+              + widthStep * height
+              + " but is "
+              + buffer.capacity());
     }
     return Packet.create(
         nativeCreateRgbImage(mediapipeGraph.getNativeHandle(), buffer, width, height));
@@ -78,8 +106,10 @@ public class PacketCreator {
   /**
    * Create a MediaPipe audio packet that is used by most of the audio calculators.
    *
-   * @param data the raw audio data, bytes per sample is 2. Must either be a direct byte buffer or
-   *     have an array.
+   * @param data the raw audio data, bytes per sample is 2(only AudioFormat.ENCODING_PCM_16BIT is
+   *     supported). Must either be a direct byte buffer or have an array, and the data has to be
+   *     FILLED with ByteOrder.LITTLE_ENDIAN byte order, which is ByteOrder.nativeOrder() on Android
+   *     (https://developer.android.com/ndk/guides/abis.html).
    * @param numChannels number of channels in the raw data.
    * @param numSamples number of samples in the data.
    */
@@ -121,7 +151,11 @@ public class PacketCreator {
    */
   public Packet createRgbImageFromRgba(ByteBuffer buffer, int width, int height) {
     if (width * height * 4 != buffer.capacity()) {
-      throw new RuntimeException("The size of the buffer should be: " + width * height * 4);
+      throw new IllegalArgumentException(
+          "The size of the buffer should be: "
+              + width * height * 4
+              + " but is "
+              + buffer.capacity());
     }
     return Packet.create(
         nativeCreateRgbImageFromRgba(mediapipeGraph.getNativeHandle(), buffer, width, height));
@@ -134,7 +168,7 @@ public class PacketCreator {
    */
   public Packet createGrayscaleImage(ByteBuffer buffer, int width, int height) {
     if (width * height != buffer.capacity()) {
-      throw new RuntimeException(
+      throw new IllegalArgumentException(
           "The size of the buffer should be: " + width * height + " but is " + buffer.capacity());
     }
     return Packet.create(
@@ -148,7 +182,11 @@ public class PacketCreator {
    */
   public Packet createRgbaImageFrame(ByteBuffer buffer, int width, int height) {
     if (buffer.capacity() != width * height * 4) {
-      throw new RuntimeException("buffer doesn't have the correct size.");
+      throw new IllegalArgumentException(
+          "The size of the buffer should be: "
+              + width * height * 4
+              + " but is "
+              + buffer.capacity());
     }
     return Packet.create(
         nativeCreateRgbaImageFrame(mediapipeGraph.getNativeHandle(), buffer, width, height));
@@ -161,7 +199,11 @@ public class PacketCreator {
    */
   public Packet createFloatImageFrame(FloatBuffer buffer, int width, int height) {
     if (buffer.capacity() != width * height * 4) {
-      throw new RuntimeException("buffer doesn't have the correct size.");
+      throw new IllegalArgumentException(
+          "The size of the buffer should be: "
+              + width * height * 4
+              + " but is "
+              + buffer.capacity());
     }
     return Packet.create(
         nativeCreateFloatImageFrame(mediapipeGraph.getNativeHandle(), buffer, width, height));
@@ -217,6 +259,10 @@ public class PacketCreator {
 
   public Packet createInt32Array(int[] data) {
     return Packet.create(nativeCreateInt32Array(mediapipeGraph.getNativeHandle(), data));
+  }
+
+  public Packet createInt32Pair(int first, int second) {
+    return Packet.create(nativeCreateInt32Pair(mediapipeGraph.getNativeHandle(), first, second));
   }
 
   public Packet createFloat32Array(float[] data) {
@@ -279,19 +325,67 @@ public class PacketCreator {
   }
 
   /**
+   * Creates a mediapipe::GpuBuffer with the specified texture name, dimensions, and format.
+   *
+   * @param name the OpenGL texture name.
+   * @param width the width in pixels.
+   * @param height the height in pixels.
+   * @param format the OpenGL texture format.
+   * @param releaseCallback a callback to be invoked when the mediapipe::GpuBuffer is released. Can
+   *     be null.
+   * @param syncMode a sync mode required for proper synchronization between external and MediaPipe
+   *     contexts.
+   */
+  public Packet createGpuBuffer(
+      int name,
+      int width,
+      int height,
+      int format,
+      TextureReleaseCallback releaseCallback,
+      SyncMode syncMode) {
+    return Packet.create(
+        nativeCreateGpuBuffer(
+            mediapipeGraph.getNativeHandle(),
+            name,
+            width,
+            height,
+            format,
+            releaseCallback,
+            syncMode.value));
+  }
+
+  /**
+   * Same as above, but doesn't request any synchronization. NOTE: prefer methods with explicit sync
+   * mode to avoid unexpected synchronization issues.
+   */
+  public Packet createGpuBuffer(
+      int name, int width, int height, int format, TextureReleaseCallback releaseCallback) {
+    return createGpuBuffer(name, width, height, format, releaseCallback, SyncMode.NO_SYNC);
+  }
+
+  /**
    * Creates a mediapipe::GpuBuffer with the specified texture name and dimensions.
    *
    * @param name the OpenGL texture name.
    * @param width the width in pixels.
    * @param height the height in pixels.
-   * @param releaseCallback a callback to be invoked when the mediapipe::GpuBuffer is released. Can be
-   *     null.
+   * @param releaseCallback a callback to be invoked when the mediapipe::GpuBuffer is released. Can
+   *     be null.
+   * @param syncMode a sync mode required for proper synchronization between external and MediaPipe
+   *     contexts.
+   */
+  public Packet createGpuBuffer(
+      int name, int width, int height, TextureReleaseCallback releaseCallback, SyncMode syncMode) {
+    return createGpuBuffer(name, width, height, GL_RGBA, releaseCallback, syncMode);
+  }
+
+  /**
+   * Same as above, but doesn't request any synchronization. NOTE: prefer methods with explicit sync
+   * mode to avoid unexpected synchronization issues.
    */
   public Packet createGpuBuffer(
       int name, int width, int height, TextureReleaseCallback releaseCallback) {
-    return Packet.create(
-        nativeCreateGpuBuffer(
-            mediapipeGraph.getNativeHandle(), name, width, height, releaseCallback));
+    return createGpuBuffer(name, width, height, releaseCallback, SyncMode.NO_SYNC);
   }
 
   /**
@@ -304,8 +398,7 @@ public class PacketCreator {
    */
   @Deprecated
   public Packet createGpuBuffer(int name, int width, int height) {
-    return Packet.create(
-        nativeCreateGpuBuffer(mediapipeGraph.getNativeHandle(), name, width, height, null));
+    return createGpuBuffer(name, width, height, GL_RGBA, null);
   }
 
   /**
@@ -316,14 +409,24 @@ public class PacketCreator {
    * Graph#createGlRunner(String,long)} with the native handle to the application's GL context as
    * the second argument.
    */
-  public Packet createGpuBuffer(TextureFrame frame) {
+  public Packet createGpuBuffer(TextureFrame frame, SyncMode syncMode) {
     return Packet.create(
         nativeCreateGpuBuffer(
             mediapipeGraph.getNativeHandle(),
             frame.getTextureName(),
             frame.getWidth(),
             frame.getHeight(),
-            frame));
+            frame.getFormat(),
+            frame,
+            syncMode.value));
+  }
+
+  /**
+   * Same as above, but doesn't request any synchronization. NOTE: prefer methods with explicit sync
+   * mode to avoid unexpected synchronization issues.
+   */
+  public Packet createGpuBuffer(TextureFrame frame) {
+    return createGpuBuffer(frame, SyncMode.NO_SYNC);
   }
 
   /**
@@ -341,6 +444,7 @@ public class PacketCreator {
             frame.getTextureName(),
             frame.getWidth(),
             frame.getHeight(),
+            frame.getFormat(),
             frame));
   }
 
@@ -352,25 +456,24 @@ public class PacketCreator {
    * <p>For 3 and 4 channel images, the pixel rows should have 4-byte alignment.
    */
   public Packet createImage(ByteBuffer buffer, int width, int height, int numChannels) {
+    int widthStep;
     if (numChannels == 4) {
-      if (buffer.capacity() != width * height * 4) {
-        throw new RuntimeException("buffer doesn't have the correct size.");
-      }
+      widthStep = width * 4;
     } else if (numChannels == 3) {
-      int widthStep = (((width * 3) + 3) / 4) * 4;
-      if (widthStep * height != buffer.capacity()) {
-        throw new RuntimeException("The size of the buffer should be: " + widthStep * height);
-      }
+      widthStep = (((width * 3) + 3) / 4) * 4;
     } else if (numChannels == 1) {
-      if (width * height != buffer.capacity()) {
-        throw new RuntimeException(
-            "The size of the buffer should be: " + width * height + " but is " + buffer.capacity());
-      }
+      widthStep = width;
     } else {
-      throw new RuntimeException("Channels should be: 1, 3, or 4, but is " + numChannels);
+      throw new IllegalArgumentException("Channels should be: 1, 3, or 4, but is " + numChannels);
+    }
+    int expectedSize = widthStep * height;
+    if (buffer.capacity() != expectedSize) {
+      throw new IllegalArgumentException(
+          "The size of the buffer should be: " + expectedSize + " but is " + buffer.capacity());
     }
     return Packet.create(
-        nativeCreateCpuImage(mediapipeGraph.getNativeHandle(), buffer, width, height, numChannels));
+        nativeCreateCpuImage(
+            mediapipeGraph.getNativeHandle(), buffer, width, height, widthStep, numChannels));
   }
 
   /** Helper callback adaptor to create the Java {@link GlSyncToken}. This is called by JNI code. */
@@ -422,15 +525,24 @@ public class PacketCreator {
   private native long nativeCreateMatrix(long context, int rows, int cols, float[] data);
 
   private native long nativeCreateGpuBuffer(
-      long context, int name, int width, int height, TextureReleaseCallback releaseCallback);
+      long context,
+      int name,
+      int width,
+      int height,
+      int format,
+      TextureReleaseCallback releaseCallback,
+      int sync);
 
   private native long nativeCreateGpuImage(
-      long context, int name, int width, int height, TextureReleaseCallback releaseCallback);
+      long context, int name, int width, int height, int format,
+      TextureReleaseCallback releaseCallback);
 
   private native long nativeCreateCpuImage(
-      long context, ByteBuffer buffer, int width, int height, int numChannels);
+      long context, ByteBuffer buffer, int width, int height, int rowBytes, int numChannels);
 
   private native long nativeCreateInt32Array(long context, int[] data);
+
+  private native long nativeCreateInt32Pair(long context, int first, int second);
 
   private native long nativeCreateFloat32Array(long context, float[] data);
 

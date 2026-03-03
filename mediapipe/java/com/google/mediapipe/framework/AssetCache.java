@@ -17,8 +17,8 @@ package com.google.mediapipe.framework;
 import android.content.Context;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.res.AssetManager;
-import androidx.annotation.VisibleForTesting;
 import android.text.TextUtils;
+import androidx.annotation.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.flogger.FluentLogger;
 import java.io.File;
@@ -133,7 +133,7 @@ public class AssetCache {
       inStream = assetManager.open(assetPath);
       writeStreamToFile(inStream, destinationFile);
     } catch (IOException ioe) {
-      logger.atSevere().log("Unable to unpack: %s", assetPath);
+      logger.atSevere().withCause(ioe).log("Unable to unpack: %s", assetPath);
       try {
         if (inStream != null) {
           inStream.close();

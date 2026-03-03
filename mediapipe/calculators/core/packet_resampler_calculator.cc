@@ -14,11 +14,16 @@
 
 #include "mediapipe/calculators/core/packet_resampler_calculator.h"
 
+#include <algorithm>
 #include <memory>
+
+#include "absl/log/absl_check.h"
+#include "absl/log/absl_log.h"
+#include "mediapipe/framework/port/ret_check.h"
 
 namespace {
 // Reflect an integer against the lower and upper bound of an interval.
-int64 ReflectBetween(int64 ts, int64 ts_min, int64 ts_max) {
+int64_t ReflectBetween(int64_t ts, int64_t ts_min, int64_t ts_max) {
   if (ts < ts_min) return 2 * ts_min - ts - 1;
   if (ts >= ts_max) return 2 * ts_max - ts - 1;
   return ts;
@@ -39,10 +44,15 @@ namespace mediapipe {
 
 REGISTER_CALCULATOR(PacketResamplerCalculator);
 namespace {
+
+constexpr char kSeedTag[] = "SEED";
+constexpr char kVideoHeaderTag[] = "VIDEO_HEADER";
+constexpr char kOptionsTag[] = "OPTIONS";
+
 // Returns a TimestampDiff (assuming microseconds) corresponding to the
 // given time in seconds.
 TimestampDiff TimestampDiffFromSeconds(double seconds) {
-  return TimestampDiff(MathUtil::SafeRound<int64, double>(
+  return TimestampDiff(MathUtil::SafeRound<int64_t, double>(
       seconds * Timestamp::kTimestampUnitsPerSecond));
 }
 }  // namespace
@@ -50,16 +60,16 @@ TimestampDiff TimestampDiffFromSeconds(double seconds) {
 absl::Status PacketResamplerCalculator::GetContract(CalculatorContract* cc) {
   const auto& resampler_options =
       cc->Options<PacketResamplerCalculatorOptions>();
-  if (cc->InputSidePackets().HasTag("OPTIONS")) {
-    cc->InputSidePackets().Tag("OPTIONS").Set<CalculatorOptions>();
+  if (cc->InputSidePackets().HasTag(kOptionsTag)) {
+    cc->InputSidePackets().Tag(kOptionsTag).Set<CalculatorOptions>();
   }
   CollectionItemId input_data_id = cc->Inputs().GetId("DATA", 0);
   if (!input_data_id.IsValid()) {
     input_data_id = cc->Inputs().GetId("", 0);
   }
   cc->Inputs().Get(input_data_id).SetAny();
-  if (cc->Inputs().HasTag("VIDEO_HEADER")) {
-    cc->Inputs().Tag("VIDEO_HEADER").Set<VideoHeader>();
+  if (cc->Inputs().HasTag(kVideoHeaderTag)) {
+    cc->Inputs().Tag(kVideoHeaderTag).Set<VideoHeader>();
   }
 
   CollectionItemId output_data_id = cc->Outputs().GetId("DATA", 0);
@@ -67,16 +77,45 @@ absl::Status PacketResamplerCalculator::GetContract(CalculatorContract* cc) {
     output_data_id = cc->Outputs().GetId("", 0);
   }
   cc->Outputs().Get(output_data_id).SetSameAs(&cc->Inputs().Get(input_data_id));
-  if (cc->Outputs().HasTag("VIDEO_HEADER")) {
-    cc->Outputs().Tag("VIDEO_HEADER").Set<VideoHeader>();
+  if (cc->Outputs().HasTag(kVideoHeaderTag)) {
+    cc->Outputs().Tag(kVideoHeaderTag).Set<VideoHeader>();
   }
 
   if (resampler_options.jitter() != 0.0) {
     RET_CHECK_GT(resampler_options.jitter(), 0.0);
     RET_CHECK_LE(resampler_options.jitter(), 1.0);
-    RET_CHECK(cc->InputSidePackets().HasTag("SEED"));
-    cc->InputSidePackets().Tag("SEED").Set<std::string>();
+    RET_CHECK(cc->InputSidePackets().HasTag(kSeedTag));
+    cc->InputSidePackets().Tag(kSeedTag).Set<std::string>();
   }
+  return absl::OkStatus();
+}
+
+absl::Status PacketResamplerCalculator::UpdateFrameRate(
+    const PacketResamplerCalculatorOptions& resampler_options,
+    double frame_rate) {
+  frame_rate_ = frame_rate;
+  if (resampler_options.max_frame_rate() > 0) {
+    frame_rate_ = std::min(frame_rate_, resampler_options.max_frame_rate());
+  }
+  start_time_ = resampler_options.has_start_time()
+                    ? Timestamp(resampler_options.start_time())
+                    : Timestamp::Min();
+  end_time_ = resampler_options.has_end_time()
+                  ? Timestamp(resampler_options.end_time())
+                  : Timestamp::Max();
+  round_limits_ = resampler_options.round_limits();
+  // The frame_rate has a default value of -1.0, so the user must set it!
+  RET_CHECK_LT(0, frame_rate_)
+      << "The output frame rate must be greater than zero";
+  RET_CHECK_LE(frame_rate_, Timestamp::kTimestampUnitsPerSecond)
+      << "The output frame rate must be smaller than "
+      << Timestamp::kTimestampUnitsPerSecond;
+
+  frame_time_usec_ = static_cast<int64_t>(1000000.0 / frame_rate_);
+  jitter_usec_ = static_cast<int64_t>(1000000.0 * jitter_ / frame_rate_);
+  RET_CHECK_LE(jitter_usec_, frame_time_usec_);
+
+  video_header_.frame_rate = frame_rate_;
   return absl::OkStatus();
 }
 
@@ -97,32 +136,16 @@ absl::Status PacketResamplerCalculator::Open(CalculatorContext* cc) {
     output_data_id_ = cc->Outputs().GetId("", 0);
   }
 
-  frame_rate_ = resampler_options.frame_rate();
-  start_time_ = resampler_options.has_start_time()
-                    ? Timestamp(resampler_options.start_time())
-                    : Timestamp::Min();
-  end_time_ = resampler_options.has_end_time()
-                  ? Timestamp(resampler_options.end_time())
-                  : Timestamp::Max();
-  round_limits_ = resampler_options.round_limits();
-  // The frame_rate has a default value of -1.0, so the user must set it!
-  RET_CHECK_LT(0, frame_rate_)
-      << "The output frame rate must be greater than zero";
-  RET_CHECK_LE(frame_rate_, Timestamp::kTimestampUnitsPerSecond)
-      << "The output frame rate must be smaller than "
-      << Timestamp::kTimestampUnitsPerSecond;
-
-  frame_time_usec_ = static_cast<int64>(1000000.0 / frame_rate_);
-  jitter_usec_ = static_cast<int64>(1000000.0 * jitter_ / frame_rate_);
-  RET_CHECK_LE(jitter_usec_, frame_time_usec_);
-
-  video_header_.frame_rate = frame_rate_;
+  RET_CHECK_OK(
+      UpdateFrameRate(resampler_options, resampler_options.frame_rate()));
 
   if (resampler_options.output_header() !=
           PacketResamplerCalculatorOptions::NONE &&
       !cc->Inputs().Get(input_data_id_).Header().IsEmpty()) {
     if (resampler_options.output_header() ==
         PacketResamplerCalculatorOptions::UPDATE_VIDEO_HEADER) {
+      RET_CHECK(resampler_options.max_frame_rate() <= 0)
+          << "Updating VideoHeader is not supported with max_frame_rate.";
       video_header_ =
           cc->Inputs().Get(input_data_id_).Header().Get<VideoHeader>();
       video_header_.frame_rate = frame_rate_;
@@ -142,19 +165,32 @@ absl::Status PacketResamplerCalculator::Open(CalculatorContext* cc) {
 }
 
 absl::Status PacketResamplerCalculator::Process(CalculatorContext* cc) {
+  const auto resampler_options =
+      tool::RetrieveOptions(cc->Options<PacketResamplerCalculatorOptions>(),
+                            cc->InputSidePackets(), "OPTIONS");
+
   if (cc->InputTimestamp() == Timestamp::PreStream() &&
-      cc->Inputs().UsesTags() && cc->Inputs().HasTag("VIDEO_HEADER") &&
-      !cc->Inputs().Tag("VIDEO_HEADER").IsEmpty()) {
-    video_header_ = cc->Inputs().Tag("VIDEO_HEADER").Get<VideoHeader>();
+      cc->Inputs().UsesTags() && cc->Inputs().HasTag(kVideoHeaderTag) &&
+      !cc->Inputs().Tag(kVideoHeaderTag).IsEmpty()) {
+    video_header_ = cc->Inputs().Tag(kVideoHeaderTag).Get<VideoHeader>();
+    if (resampler_options.use_input_frame_rate()) {
+      RET_CHECK_OK(
+          UpdateFrameRate(resampler_options, video_header_.frame_rate));
+    }
     video_header_.frame_rate = frame_rate_;
     if (cc->Inputs().Get(input_data_id_).IsEmpty()) {
       return absl::OkStatus();
     }
   }
-
-  if (absl::Status status = strategy_->Process(cc); !status.ok()) {
-    return status;  // Avoid MP_RETURN_IF_ERROR macro for external release.
+  if (!header_sent_ && cc->Outputs().UsesTags() &&
+      cc->Outputs().HasTag(kVideoHeaderTag)) {
+    cc->Outputs()
+        .Tag(kVideoHeaderTag)
+        .Add(new VideoHeader(video_header_), Timestamp::PreStream());
+    header_sent_ = true;
   }
+
+  MP_RETURN_IF_ERROR(strategy_->Process(cc));
 
   last_packet_ = cc->Inputs().Get(input_data_id_).Value();
 
@@ -174,7 +210,7 @@ PacketResamplerCalculator::GetSamplingStrategy(
     const PacketResamplerCalculatorOptions& options) {
   if (options.reproducible_sampling()) {
     if (!options.jitter_with_reflection()) {
-      LOG(WARNING)
+      ABSL_LOG(WARNING)
           << "reproducible_sampling enabled w/ jitter_with_reflection "
              "disabled. "
           << "reproducible_sampling always uses jitter with reflection, "
@@ -195,17 +231,18 @@ PacketResamplerCalculator::GetSamplingStrategy(
   return absl::make_unique<JitterWithoutReflectionStrategy>(this);
 }
 
-Timestamp PacketResamplerCalculator::PeriodIndexToTimestamp(int64 index) const {
-  CHECK_EQ(jitter_, 0.0);
-  CHECK_NE(first_timestamp_, Timestamp::Unset());
+Timestamp PacketResamplerCalculator::PeriodIndexToTimestamp(
+    int64_t index) const {
+  ABSL_CHECK_EQ(jitter_, 0.0);
+  ABSL_CHECK_NE(first_timestamp_, Timestamp::Unset());
   return first_timestamp_ + TimestampDiffFromSeconds(index / frame_rate_);
 }
 
-int64 PacketResamplerCalculator::TimestampToPeriodIndex(
+int64_t PacketResamplerCalculator::TimestampToPeriodIndex(
     Timestamp timestamp) const {
-  CHECK_EQ(jitter_, 0.0);
-  CHECK_NE(first_timestamp_, Timestamp::Unset());
-  return MathUtil::SafeRound<int64, double>(
+  ABSL_CHECK_EQ(jitter_, 0.0);
+  ABSL_CHECK_NE(first_timestamp_, Timestamp::Unset());
+  return MathUtil::SafeRound<int64_t, double>(
       (timestamp - first_timestamp_).Seconds() * frame_rate_);
 }
 
@@ -225,16 +262,18 @@ absl::Status LegacyJitterWithReflectionStrategy::Open(CalculatorContext* cc) {
 
   if (resampler_options.output_header() !=
       PacketResamplerCalculatorOptions::NONE) {
-    LOG(WARNING) << "VideoHeader::frame_rate holds the target value and not "
-                    "the actual value.";
+    ABSL_LOG(WARNING)
+        << "VideoHeader::frame_rate holds the target value and not "
+           "the actual value.";
   }
 
   if (calculator_->flush_last_packet_) {
-    LOG(WARNING) << "PacketResamplerCalculatorOptions.flush_last_packet is "
-                    "ignored, because we are adding jitter.";
+    ABSL_LOG(WARNING)
+        << "PacketResamplerCalculatorOptions.flush_last_packet is "
+           "ignored, because we are adding jitter.";
   }
 
-  const auto& seed = cc->InputSidePackets().Tag("SEED").Get<std::string>();
+  const auto& seed = cc->InputSidePackets().Tag(kSeedTag).Get<std::string>();
   random_ = CreateSecureRandom(seed);
   if (random_ == nullptr) {
     return absl::InvalidArgumentError(
@@ -250,7 +289,7 @@ absl::Status LegacyJitterWithReflectionStrategy::Open(CalculatorContext* cc) {
 }
 absl::Status LegacyJitterWithReflectionStrategy::Close(CalculatorContext* cc) {
   if (!packet_reservoir_->IsEmpty()) {
-    LOG(INFO) << "Emitting pack from reservoir.";
+    ABSL_LOG(INFO) << "Emitting pack from reservoir.";
     calculator_->OutputWithinLimits(cc, packet_reservoir_->GetSample());
   }
   return absl::OkStatus();
@@ -281,16 +320,16 @@ absl::Status LegacyJitterWithReflectionStrategy::Process(
 
   if (calculator_->frame_time_usec_ <
       (cc->InputTimestamp() - calculator_->last_packet_.Timestamp()).Value()) {
-    LOG_FIRST_N(WARNING, 2)
+    ABSL_LOG_FIRST_N(WARNING, 2)
         << "Adding jitter is not very useful when upsampling.";
   }
 
   while (true) {
-    const int64 last_diff =
+    const int64_t last_diff =
         (next_output_timestamp_ - calculator_->last_packet_.Timestamp())
             .Value();
     RET_CHECK_GT(last_diff, 0);
-    const int64 curr_diff =
+    const int64_t curr_diff =
         (next_output_timestamp_ - cc->InputTimestamp()).Value();
     if (curr_diff > 0) {
       break;
@@ -336,8 +375,8 @@ void LegacyJitterWithReflectionStrategy::UpdateNextOutputTimestampWithJitter() {
   next_output_timestamp_ = Timestamp(ReflectBetween(
       next_output_timestamp_.Value(), next_output_timestamp_min_.Value(),
       next_output_timestamp_max_.Value()));
-  CHECK_GE(next_output_timestamp_, next_output_timestamp_min_);
-  CHECK_LT(next_output_timestamp_, next_output_timestamp_max_);
+  ABSL_CHECK_GE(next_output_timestamp_, next_output_timestamp_min_);
+  ABSL_CHECK_LT(next_output_timestamp_, next_output_timestamp_max_);
 }
 
 absl::Status ReproducibleJitterWithReflectionStrategy::Open(
@@ -348,16 +387,18 @@ absl::Status ReproducibleJitterWithReflectionStrategy::Open(
 
   if (resampler_options.output_header() !=
       PacketResamplerCalculatorOptions::NONE) {
-    LOG(WARNING) << "VideoHeader::frame_rate holds the target value and not "
-                    "the actual value.";
+    ABSL_LOG(WARNING)
+        << "VideoHeader::frame_rate holds the target value and not "
+           "the actual value.";
   }
 
   if (calculator_->flush_last_packet_) {
-    LOG(WARNING) << "PacketResamplerCalculatorOptions.flush_last_packet is "
-                    "ignored, because we are adding jitter.";
+    ABSL_LOG(WARNING)
+        << "PacketResamplerCalculatorOptions.flush_last_packet is "
+           "ignored, because we are adding jitter.";
   }
 
-  const auto& seed = cc->InputSidePackets().Tag("SEED").Get<std::string>();
+  const auto& seed = cc->InputSidePackets().Tag(kSeedTag).Get<std::string>();
   random_ = CreateSecureRandom(seed);
   if (random_ == nullptr) {
     return absl::InvalidArgumentError(
@@ -407,7 +448,7 @@ absl::Status ReproducibleJitterWithReflectionStrategy::Process(
     // Note, if the stream is upsampling, this could lead to the same packet
     // being emitted twice.  Upsampling and jitter doesn't make much sense
     // but does technically work.
-    LOG_FIRST_N(WARNING, 2)
+    ABSL_LOG_FIRST_N(WARNING, 2)
         << "Adding jitter is not very useful when upsampling.";
   }
 
@@ -495,16 +536,18 @@ absl::Status JitterWithoutReflectionStrategy::Open(CalculatorContext* cc) {
 
   if (resampler_options.output_header() !=
       PacketResamplerCalculatorOptions::NONE) {
-    LOG(WARNING) << "VideoHeader::frame_rate holds the target value and not "
-                    "the actual value.";
+    ABSL_LOG(WARNING)
+        << "VideoHeader::frame_rate holds the target value and not "
+           "the actual value.";
   }
 
   if (calculator_->flush_last_packet_) {
-    LOG(WARNING) << "PacketResamplerCalculatorOptions.flush_last_packet is "
-                    "ignored, because we are adding jitter.";
+    ABSL_LOG(WARNING)
+        << "PacketResamplerCalculatorOptions.flush_last_packet is "
+           "ignored, because we are adding jitter.";
   }
 
-  const auto& seed = cc->InputSidePackets().Tag("SEED").Get<std::string>();
+  const auto& seed = cc->InputSidePackets().Tag(kSeedTag).Get<std::string>();
   random_ = CreateSecureRandom(seed);
   if (random_ == nullptr) {
     return absl::InvalidArgumentError(
@@ -551,16 +594,16 @@ absl::Status JitterWithoutReflectionStrategy::Process(CalculatorContext* cc) {
 
   if (calculator_->frame_time_usec_ <
       (cc->InputTimestamp() - calculator_->last_packet_.Timestamp()).Value()) {
-    LOG_FIRST_N(WARNING, 2)
+    ABSL_LOG_FIRST_N(WARNING, 2)
         << "Adding jitter is not very useful when upsampling.";
   }
 
   while (true) {
-    const int64 last_diff =
+    const int64_t last_diff =
         (next_output_timestamp_ - calculator_->last_packet_.Timestamp())
             .Value();
     RET_CHECK_GT(last_diff, 0);
-    const int64 curr_diff =
+    const int64_t curr_diff =
         (next_output_timestamp_ - cc->InputTimestamp()).Value();
     if (curr_diff > 0) {
       break;
@@ -628,22 +671,16 @@ absl::Status NoJitterStrategy::Process(CalculatorContext* cc) {
     } else {
       // Initialize first_timestamp_ with the first packet timestamp
       // aligned to the base_timestamp_.
-      int64 first_index = MathUtil::SafeRound<int64, double>(
+      int64_t first_index = MathUtil::SafeRound<int64_t, double>(
           (cc->InputTimestamp() - base_timestamp_).Seconds() *
           calculator_->frame_rate_);
       calculator_->first_timestamp_ =
           base_timestamp_ +
           TimestampDiffFromSeconds(first_index / calculator_->frame_rate_);
     }
-    if (cc->Outputs().UsesTags() && cc->Outputs().HasTag("VIDEO_HEADER")) {
-      cc->Outputs()
-          .Tag("VIDEO_HEADER")
-          .Add(new VideoHeader(calculator_->video_header_),
-               Timestamp::PreStream());
-    }
   }
   const Timestamp received_timestamp = cc->InputTimestamp();
-  const int64 received_timestamp_idx =
+  const int64_t received_timestamp_idx =
       calculator_->TimestampToPeriodIndex(received_timestamp);
   // Only consider the received packet if it belongs to the current period
   // (== period_count_) or to a newer one (> period_count_).

@@ -16,15 +16,16 @@ load(
     "@build_bazel_rules_apple//apple:ios.bzl",
     "ios_application",
 )
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load(
     "//mediapipe/examples/ios:bundle_id.bzl",
     "BUNDLE_ID_PREFIX",
     "example_provisioning",
 )
 
-licenses(["notice"])  # Apache 2.0
+licenses(["notice"])
 
-MIN_IOS_VERSION = "10.0"
+MIN_IOS_VERSION = "12.0"
 
 alias(
     name = "objectdetectiongpu",
@@ -61,7 +62,6 @@ objc_library(
     deps = [
         "//mediapipe/examples/ios/common:CommonMediaPipeAppLibrary",
     ] + select({
-        "//mediapipe:ios_i386": [],
         "//mediapipe:ios_x86_64": [],
         "//conditions:default": [
             "//mediapipe/graphs/object_detection:mobile_calculators",

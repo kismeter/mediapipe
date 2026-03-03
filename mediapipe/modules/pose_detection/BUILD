@@ -13,6 +13,10 @@
 # limitations under the License.
 
 load(
+    "//mediapipe/framework/tool:mediapipe_files.bzl",
+    "mediapipe_files",
+)
+load(
     "//mediapipe/framework/tool:mediapipe_graph.bzl",
     "mediapipe_simple_subgraph",
 )
@@ -49,7 +53,7 @@ mediapipe_simple_subgraph(
     ],
 )
 
-exports_files(
+mediapipe_files(
     srcs = [
         "pose_detection.tflite",
     ],

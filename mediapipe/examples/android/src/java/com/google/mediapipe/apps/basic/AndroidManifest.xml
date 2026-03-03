@@ -4,11 +4,14 @@
 
   <uses-sdk
       android:minSdkVersion="21"
-      android:targetSdkVersion="27" />
+      android:targetSdkVersion="34" />
 
   <!-- For using the camera -->
   <uses-permission android:name="android.permission.CAMERA" />
   <uses-feature android:name="android.hardware.camera" />
+
+  <!-- For profiling -->
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 
   <application
       android:allowBackup="true"

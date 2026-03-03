@@ -15,18 +15,17 @@
 #ifndef MEDIAPIPE_FRAMEWORK_INPUT_STREAM_MANAGER_H_
 #define MEDIAPIPE_FRAMEWORK_INPUT_STREAM_MANAGER_H_
 
+#include <cstdint>
 #include <deque>
 #include <functional>
 #include <list>
 #include <string>
 
 #include "absl/base/thread_annotations.h"
+#include "absl/status/status.h"
 #include "absl/synchronization/mutex.h"
 #include "mediapipe/framework/packet.h"
 #include "mediapipe/framework/packet_type.h"
-#include "mediapipe/framework/port.h"
-#include "mediapipe/framework/port/integral_types.h"
-#include "mediapipe/framework/port/status.h"
 #include "mediapipe/framework/timestamp.h"
 
 namespace mediapipe {
@@ -69,7 +68,10 @@ class InputStreamManager {
   // Sets the header Packet.
   absl::Status SetHeader(const Packet& header);
 
-  const Packet& Header() const { return header_; }
+  Packet Header() const {
+    absl::MutexLock stream_lock(&stream_mutex_);
+    return header_;
+  }
 
   // Reset the input stream for another run of the graph (i.e. another
   // image/video/audio).
@@ -87,12 +89,14 @@ class InputStreamManager {
   //   Timestamp::PostStream(), the packet must be the only packet in the
   //   stream.
   // Violation of any of these conditions causes an error status.
-  absl::Status AddPackets(const std::list<Packet>& container, bool* notify);
+  absl::Status AddPackets(const std::list<Packet>& container, bool* notify)
+      ABSL_LOCKS_EXCLUDED(stream_mutex_);
 
   // Move a list of timestamped packets. Sets "notify" to true if the queue
   // becomes non-empty. Does nothing if the input stream is closed. After the
   // move, all packets in the container must be empty.
-  absl::Status MovePackets(std::list<Packet>* container, bool* notify);
+  absl::Status MovePackets(std::list<Packet>* container, bool* notify)
+      ABSL_LOCKS_EXCLUDED(stream_mutex_);
 
   // Closes the input stream.  This function can be called multiple times.
   void Close() ABSL_LOCKS_EXCLUDED(stream_mutex_);
@@ -139,6 +143,9 @@ class InputStreamManager {
   // non-empty. Sets "stream_is_done" if  the next timestamp bound reaches
   // Timestamp::Done() after the pop.
   Packet PopQueueHead(bool* stream_is_done) ABSL_LOCKS_EXCLUDED(stream_mutex_);
+
+  // Returns the number of packets in the queue.
+  int NumPacketsAdded() const ABSL_LOCKS_EXCLUDED(stream_mutex_);
 
   // Returns the number of packets in the queue.
   int QueueSize() const ABSL_LOCKS_EXCLUDED(stream_mutex_);
@@ -194,7 +201,7 @@ class InputStreamManager {
   std::deque<Packet> queue_ ABSL_GUARDED_BY(stream_mutex_);
   // The number of packets added to queue_.  Used to verify a packet at
   // Timestamp::PostStream() is the only Packet in the stream.
-  int64 num_packets_added_ ABSL_GUARDED_BY(stream_mutex_);
+  int64_t num_packets_added_ ABSL_GUARDED_BY(stream_mutex_);
   Timestamp next_timestamp_bound_ ABSL_GUARDED_BY(stream_mutex_);
   // The |timestamp| argument passed to the last SelectAtTimestamp() call.
   // Ignored if enable_timestamps_ is false.
@@ -206,7 +213,7 @@ class InputStreamManager {
   const PacketType* packet_type_;
   bool back_edge_;
   // The header packet of the input stream.
-  Packet header_;
+  Packet header_ ABSL_GUARDED_BY(stream_mutex_);
 
   // The maximum queue size for this stream if set.
   int max_queue_size_ ABSL_GUARDED_BY(stream_mutex_) = -1;

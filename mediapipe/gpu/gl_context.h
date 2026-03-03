@@ -18,9 +18,18 @@
 #include <pthread.h>
 
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <memory>
+#include <type_traits>
 
+#include "absl/base/attributes.h"
+#include "absl/base/thread_annotations.h"
+#include "absl/container/flat_hash_map.h"
+#include "absl/log/absl_check.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "mediapipe/framework/executor.h"
 #include "mediapipe/framework/mediapipe_profiling.h"
@@ -28,6 +37,7 @@
 #include "mediapipe/framework/port/statusor.h"
 #include "mediapipe/framework/port/threadpool.h"
 #include "mediapipe/framework/timestamp.h"
+#include "mediapipe/gpu/attachments.h"
 #include "mediapipe/gpu/gl_base.h"
 #include "mediapipe/gpu/gpu_buffer_format.h"
 
@@ -68,6 +78,8 @@ typedef std::function<void()> GlVoidFunction;
 typedef std::function<absl::Status()> GlStatusFunction;
 
 class GlContext;
+// TODO: remove after glWaitSync crashes are resolved.
+class GlSyncWrapper;
 
 // Generic interface for synchronizing access to a shared resource from a
 // different context. This is an abstract class to keep users from
@@ -92,6 +104,7 @@ class GlSyncPoint {
   // Returns whether the sync point has been reached. Does not block.
   virtual bool IsReady() = 0;
 
+  // Returns the GlContext object associated with this sync point, if any.
   const std::shared_ptr<GlContext>& GetContext() { return gl_context_; }
 
  protected:
@@ -186,8 +199,7 @@ class GlContext : public std::enable_shared_from_this<GlContext> {
   // Like Run, but does not wait.
   void RunWithoutWaiting(GlVoidFunction gl_func);
 
-  // Returns a synchronization token.
-  // This should not be called outside of the GlContext thread.
+  // Returns a synchronization token for this GlContext.
   std::shared_ptr<GlSyncPoint> CreateSyncToken();
 
   // If another part of the framework calls glFinish, it should call this
@@ -228,6 +240,12 @@ class GlContext : public std::enable_shared_from_this<GlContext> {
   CVOpenGLTextureCacheRef cv_texture_cache() const { return *texture_cache_; }
 #endif  // HAS_EGL
 
+  // Returns whatever the current platform's native context handle is.
+  // Prefer the explicit *_context methods above, unless you're going to use
+  // this in a context that you are sure will work with whatever definition of
+  // PlatformGlContext is in use.
+  PlatformGlContext native_context() const { return context_; }
+
   // Check if the context is current on this thread. Mainly for test purposes.
   bool IsCurrent() const;
 
@@ -267,14 +285,49 @@ class GlContext : public std::enable_shared_from_this<GlContext> {
   //
   // Therefore, instead of using std::function<void(void)>, we use a template
   // that only accepts arguments with a void result type.
-  template <typename T, typename = typename std::enable_if<std::is_void<
-                            typename std::result_of<T()>::type>::value>::type>
+  template <typename T, typename = typename std::enable_if<
+                            std::is_void<std::invoke_result_t<T>>::value>::type>
   void Run(T f) {
     Run([f] {
       f();
       return absl::OkStatus();
     }).IgnoreError();
   }
+
+  // Sets default texture filtering parameters.
+  void SetStandardTextureParams(GLenum target, GLint internal_format);
+
+  using AttachmentBase = internal::AttachmentBase<GlContext>;
+  template <class T>
+  using Attachment = internal::Attachment<GlContext, T>;
+
+  // TOOD: const result?
+  template <class T>
+  T& GetCachedAttachment(const Attachment<T>& attachment) {
+    ABSL_DCHECK(IsCurrent());
+    internal::AttachmentPtr<void>& entry = attachments_[&attachment];
+    if (entry == nullptr) {
+      entry = attachment.factory()(*this);
+    }
+    return *static_cast<T*>(entry.get());
+  }
+
+  // Returns true if any GL context, including external contexts not managed by
+  // the GlContext class, is current.
+  static bool IsAnyContextCurrent();
+
+  // Returns the current native context, whether managed by this class or not.
+  // Useful as a cross-platform way to get the current PlatformGlContext.
+  static PlatformGlContext GetCurrentNativeContext();
+
+  // Creates a synchronization token for the current, non-GlContext-owned
+  // context. This can be passed to MediaPipe so it can synchronize with the
+  // commands issued in the external context up to this point.
+  // Note: if the current context does not support sync fences, this calls
+  // glFinish and returns nullptr.
+  // TODO: return GlNopSyncPoint instead?
+  static std::shared_ptr<GlSyncPoint> CreateSyncTokenForCurrentExternalContext(
+      const std::shared_ptr<GlContext>& delegate_graph_context);
 
   // These are used for testing specific SyncToken implementations. Do not use
   // outside of tests.
@@ -285,7 +338,12 @@ class GlContext : public std::enable_shared_from_this<GlContext> {
       SyncTokenTypeForTest type);
 
  private:
+  // TODO: remove after glWaitSync crashes are resolved.
+  friend GlSyncWrapper;
+
   GlContext();
+
+  bool ShouldUseFenceSync() const;
 
 #if defined(__EMSCRIPTEN__)
   absl::Status CreateContext(EMSCRIPTEN_WEBGL_CONTEXT_HANDLE share_context);
@@ -342,11 +400,11 @@ class GlContext : public std::enable_shared_from_this<GlContext> {
   // This wraps a thread_local.
   static std::weak_ptr<GlContext>& CurrentContext();
 
-  static absl::Status SwitchContext(ContextBinding* old_context,
+  static absl::Status SwitchContext(ContextBinding* saved_context,
                                     const ContextBinding& new_context);
 
-  absl::Status EnterContext(ContextBinding* previous_context);
-  absl::Status ExitContext(const ContextBinding* previous_context);
+  absl::Status EnterContext(ContextBinding* saved_context);
+  absl::Status ExitContext(const ContextBinding* saved_context);
   void DestroyContext();
 
   bool HasContext() const;
@@ -378,12 +436,14 @@ class GlContext : public std::enable_shared_from_this<GlContext> {
 
   // A binding that can be used to make this GlContext current.
   ContextBinding ThisContextBinding();
+  // Fill in platform-specific fields. Must _not_ set context_obj.
+  ContextBinding ThisContextBindingPlatform();
   // Fills in a ContextBinding with platform-specific information about which
   // context is current on this thread.
   static void GetCurrentContextBinding(ContextBinding* binding);
   // Makes the context described by new_context current on this thread.
   static absl::Status SetCurrentContextBinding(
-      const ContextBinding& new_context);
+      const ContextBinding& new_binding);
 
   // If not null, a dedicated thread used to execute tasks on this context.
   // Used on Android due to expensive context switching on some configurations.
@@ -396,11 +456,18 @@ class GlContext : public std::enable_shared_from_this<GlContext> {
   // so we should be fine storing the extension pieces as string_view's.
   std::set<absl::string_view> gl_extensions_;
 
+  // Used by SetStandardTextureParams. Do we want several of these bools, or a
+  // better mechanism?
+  bool can_linear_filter_float_textures_;
+
+  absl::flat_hash_map<const AttachmentBase*, internal::AttachmentPtr<void>>
+      attachments_;
+
   // Number of glFinish calls completed on the GL thread.
   // Changes should be guarded by mutex_. However, we use simple atomic
   // loads for efficiency on the fast path.
-  std::atomic<int64_t> gl_finish_count_ = ATOMIC_VAR_INIT(0);
-  std::atomic<int64_t> gl_finish_count_target_ = ATOMIC_VAR_INIT(0);
+  std::atomic<int64_t> gl_finish_count_ = 0;
+  std::atomic<int64_t> gl_finish_count_target_ = 0;
 
   GlContext* context_waiting_on_ ABSL_GUARDED_BY(mutex_) = nullptr;
 
@@ -415,7 +482,15 @@ class GlContext : public std::enable_shared_from_this<GlContext> {
   absl::CondVar wait_for_gl_finish_cv_ ABSL_GUARDED_BY(mutex_);
 
   std::unique_ptr<mediapipe::GlProfilingHelper> profiling_helper_ = nullptr;
+
+  bool destructing_ = false;
 };
+
+// A framebuffer that the framework can use to attach textures for rendering
+// etc.
+// This could just be a member of GlContext, but it serves as a basic example
+// of an attachment.
+ABSL_CONST_INIT extern const GlContext::Attachment<GLuint> kUtilityFramebuffer;
 
 // For backward compatibility. TODO: migrate remaining callers.
 ABSL_DEPRECATED(
@@ -424,5 +499,18 @@ ABSL_DEPRECATED(
 const GlTextureInfo& GlTextureInfoForGpuBufferFormat(GpuBufferFormat format,
                                                      int plane);
 
+namespace internal_gl_context {
+
+struct OpenGlVersion {
+  int major;
+  int minor;
+};
+
+bool IsOpenGlVersionSameOrAbove(const OpenGlVersion& version,
+                                const OpenGlVersion& expected_version);
+
+}  // namespace internal_gl_context
+
 }  // namespace mediapipe
+
 #endif  // MEDIAPIPE_GPU_GL_CONTEXT_H_

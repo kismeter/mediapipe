@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 licenses(["notice"])
 
 package(default_visibility = ["//visibility:private"])
@@ -37,9 +40,10 @@ android_binary(
     srcs = glob(["*.java"]),
     assets = [
         "//mediapipe/graphs/holistic_tracking:holistic_tracking_gpu.binarypb",
-        "//mediapipe/modules/face_detection:face_detection_front.tflite",
+        "//mediapipe/modules/face_detection:face_detection_short_range.tflite",
         "//mediapipe/modules/face_landmark:face_landmark.tflite",
-        "//mediapipe/modules/hand_landmark:hand_landmark.tflite",
+        "//mediapipe/modules/hand_landmark:hand_landmark_full.tflite",
+        "//mediapipe/modules/hand_landmark:hand_landmark_lite.tflite",
         "//mediapipe/modules/hand_landmark:handedness.txt",
         "//mediapipe/modules/holistic_landmark:hand_recrop.tflite",
         "//mediapipe/modules/pose_detection:pose_detection.tflite",
@@ -58,11 +62,11 @@ android_binary(
         "flipFramesVertically": "True",
         "converterNumBuffers": "3",
     },
-    multidex = "native",
     deps = [
         ":mediapipe_jni_lib",
         "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/basic:basic_lib",
         "//mediapipe/framework/formats:landmark_java_proto_lite",
         "//mediapipe/java/com/google/mediapipe/framework:android_framework",
+        "//third_party:libc++_shared_lib",
     ],
 )

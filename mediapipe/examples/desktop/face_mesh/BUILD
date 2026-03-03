@@ -12,20 +12,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+
 licenses(["notice"])
 
-package(default_visibility = ["//mediapipe/examples:__subpackages__"])
-
+# BUILD:
+# bazel build -c opt --define MEDIAPIPE_DISABLE_GPU=1 \
+#   //mediapipe/examples/desktop/face_mesh:face_mesh_tflite
+# RUN:
+# bazel-bin/mediapipe/examples/desktop/face_mesh/face_mesh_tflite \
+#   --calculator_graph_config_file=<.../face_mesh_desktop.pbtxt> \
+#   --input_side_packets=input_video_path=<input video path>,output_video_path=<output video path>
 cc_binary(
     name = "face_mesh_tflite",
+    data = ["//mediapipe/modules/face_landmark:face_landmark_with_attention.tflite"],
     deps = [
         "//mediapipe/examples/desktop:simple_run_graph_main",
         "//mediapipe/graphs/face_mesh:desktop_calculators",
     ],
 )
 
+# BUILD:
+# bazel build -c opt --define MEDIAPIPE_DISABLE_GPU=1 \
+#   //mediapipe/examples/desktop/face_mesh:face_mesh_cpu
+# RUN:
+# bazel-bin/mediapipe/examples/desktop/face_mesh/face_mesh_cpu \
+#   --calculator_graph_config_file=<.../face_mesh_desktop_live.pbtxt> \
+#   --input_video_path=<input video path> \
+#   --output_video_path=<output video path>
 cc_binary(
     name = "face_mesh_cpu",
+    data = ["//mediapipe/modules/face_landmark:face_landmark_with_attention.tflite"],
     deps = [
         "//mediapipe/examples/desktop:demo_run_graph_main",
         "//mediapipe/graphs/face_mesh:desktop_live_calculators",
@@ -35,6 +52,7 @@ cc_binary(
 # Linux only
 cc_binary(
     name = "face_mesh_gpu",
+    data = ["//mediapipe/modules/face_landmark:face_landmark_with_attention.tflite"],
     deps = [
         "//mediapipe/examples/desktop:demo_run_graph_main_gpu",
         "//mediapipe/graphs/face_mesh:desktop_live_gpu_calculators",

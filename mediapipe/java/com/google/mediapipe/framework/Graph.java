@@ -18,6 +18,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.flogger.FluentLogger;
 import com.google.mediapipe.proto.CalculatorProto.CalculatorGraphConfig;
 import com.google.mediapipe.proto.GraphTemplateProto.CalculatorGraphTemplate;
+import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -111,6 +112,13 @@ public class Graph {
     nativeLoadBinaryGraphTemplate(nativeGraphHandle, template.toByteArray());
   }
 
+  /** Specifies a CalculatorGraphTemplate for a mediapipe graph or subgraph from a byte array. */
+  public synchronized void loadBinaryGraphTemplate(byte[] data) {
+    Preconditions.checkState(
+        nativeGraphHandle != 0, "Invalid context, tearDown() might have been called already.");
+    nativeLoadBinaryGraphTemplate(nativeGraphHandle, data);
+  }
+
   /** Specifies the CalculatorGraphConfig::type of the top level graph. */
   public synchronized void setGraphType(String graphType) {
     nativeSetGraphType(nativeGraphHandle, graphType);
@@ -123,19 +131,30 @@ public class Graph {
 
   /**
    * Returns the canonicalized CalculatorGraphConfig with subgraphs and graph templates expanded.
+   *
+   * <p>Additionally allows specifying an extension registry so that proto extensions will be parsed
+   * correctly.
    */
-  public synchronized CalculatorGraphConfig getCalculatorGraphConfig() {
+  public synchronized CalculatorGraphConfig getCalculatorGraphConfig(
+      ExtensionRegistryLite registry) {
     Preconditions.checkState(
         nativeGraphHandle != 0, "Invalid context, tearDown() might have been called already.");
     byte[] data = nativeGetCalculatorGraphConfig(nativeGraphHandle);
     if (data != null) {
       try {
-        return CalculatorGraphConfig.parseFrom(data);
+        return CalculatorGraphConfig.parseFrom(data, registry);
       } catch (InvalidProtocolBufferException e) {
         throw new RuntimeException(e);
       }
     }
     return null;
+  }
+
+  /**
+   * Returns the canonicalized CalculatorGraphConfig with subgraphs and graph templates expanded.
+   */
+  public synchronized CalculatorGraphConfig getCalculatorGraphConfig() {
+    return getCalculatorGraphConfig(ProtoUtil.getExtensionRegistry());
   }
 
   /**

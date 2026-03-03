@@ -77,7 +77,7 @@ absl::StatusOr<double> ComputeFocalLengthInPixels(int image_width,
   return focal_length_pixels;
 }
 
-absl::StatusOr<ImageFileProperties> GetImageFileProperites(
+absl::StatusOr<ImageFileProperties> GetImageFileProperties(
     const std::string& image_bytes) {
   easyexif::EXIFInfo result;
   int code = result.parseFrom(image_bytes);
@@ -92,11 +92,11 @@ absl::StatusOr<ImageFileProperties> GetImageFileProperites(
   properties.set_focal_length_mm(result.FocalLength);
   properties.set_focal_length_35mm(result.FocalLengthIn35mm);
 
-  ASSIGN_OR_RETURN(auto focal_length_pixels,
-                   ComputeFocalLengthInPixels(properties.image_width(),
-                                              properties.image_height(),
-                                              properties.focal_length_35mm(),
-                                              properties.focal_length_mm()));
+  MP_ASSIGN_OR_RETURN(auto focal_length_pixels,
+                      ComputeFocalLengthInPixels(properties.image_width(),
+                                                 properties.image_height(),
+                                                 properties.focal_length_35mm(),
+                                                 properties.focal_length_mm()));
   properties.set_focal_length_pixels(focal_length_pixels);
 
   return properties;
@@ -105,7 +105,7 @@ absl::StatusOr<ImageFileProperties> GetImageFileProperites(
 }  // namespace
 
 // Calculator to extract EXIF information from an image file. The input is
-// a std::string containing raw byte data from a file, and the output is an
+// a string containing raw byte data from a file, and the output is an
 // ImageFileProperties proto object with the relevant fields filled in.
 // The calculator accepts the input as a stream or a side packet, and can output
 // the result as a stream or a side packet. The calculator checks that if an
@@ -151,7 +151,7 @@ class ImageFilePropertiesCalculator : public CalculatorBase {
     if (cc->InputSidePackets().NumEntries() == 1) {
       const std::string& image_bytes =
           cc->InputSidePackets().Index(0).Get<std::string>();
-      ASSIGN_OR_RETURN(properties_, GetImageFileProperites(image_bytes));
+      MP_ASSIGN_OR_RETURN(properties_, GetImageFileProperties(image_bytes));
       read_properties_ = true;
     }
 
@@ -169,7 +169,7 @@ class ImageFilePropertiesCalculator : public CalculatorBase {
         return absl::OkStatus();
       }
       const std::string& image_bytes = cc->Inputs().Index(0).Get<std::string>();
-      ASSIGN_OR_RETURN(properties_, GetImageFileProperites(image_bytes));
+      MP_ASSIGN_OR_RETURN(properties_, GetImageFileProperties(image_bytes));
       read_properties_ = true;
     }
     if (read_properties_) {

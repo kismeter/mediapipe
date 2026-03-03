@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 licenses(["notice"])
 
 package(default_visibility = [
@@ -35,6 +38,7 @@ cc_library(
         "//mediapipe/framework/port:status",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
+        "@com_google_absl//absl/log:absl_log",
     ],
 )
 
@@ -43,6 +47,7 @@ cc_library(
 cc_binary(
     name = "object_detection_tpu",
     deps = [
+        "//mediapipe/calculators/image:image_transformation_calculator",
         "//mediapipe/examples/coral:demo_run_graph_main",
         "//mediapipe/graphs/object_detection:desktop_tflite_calculators",
     ],
@@ -51,6 +56,12 @@ cc_binary(
 cc_binary(
     name = "face_detection_tpu",
     deps = [
+        "//mediapipe/calculators/image:image_transformation_calculator",
+        "//mediapipe/calculators/tflite:tflite_converter_calculator",
+        "//mediapipe/calculators/tflite:tflite_inference_calculator",
+        "//mediapipe/calculators/tflite:tflite_tensors_to_detections_calculator",
+        "//mediapipe/calculators/util:detection_label_id_to_text_calculator",
+        "//mediapipe/calculators/util:detection_letterbox_removal_calculator",
         "//mediapipe/examples/coral:demo_run_graph_main",
         "//mediapipe/graphs/face_detection:desktop_live_calculators",
     ],

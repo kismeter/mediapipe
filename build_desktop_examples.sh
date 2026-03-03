@@ -83,7 +83,7 @@ for app in ${apps}; do
       bazel_flags=("${default_bazel_flags[@]}")
       bazel_flags+=(${target})
 
-      bazel "${bazel_flags[@]}"
+      bazelisk "${bazel_flags[@]}"
       cp -f "${bin_dir}/${app}/"*"_cpu" "${out_dir}"
     fi
     if [[ $build_only == false ]]; then
@@ -97,6 +97,7 @@ for app in ${apps}; do
       if [[ ${target_name} == "holistic_tracking" ||
             ${target_name} == "iris_tracking" ||
             ${target_name} == "pose_tracking" ||
+            ${target_name} == "selfie_segmentation" ||
             ${target_name} == "upper_body_pose_tracking" ]]; then
         graph_suffix="cpu"
       else

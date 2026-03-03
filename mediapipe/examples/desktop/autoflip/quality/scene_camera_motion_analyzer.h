@@ -15,12 +15,12 @@
 #ifndef MEDIAPIPE_EXAMPLES_DESKTOP_AUTOFLIP_QUALITY_SCENE_CAMERA_MOTION_ANALYZER_H_
 #define MEDIAPIPE_EXAMPLES_DESKTOP_AUTOFLIP_QUALITY_SCENE_CAMERA_MOTION_ANALYZER_H_
 
+#include <cstdint>
 #include <vector>
 
 #include "mediapipe/examples/desktop/autoflip/autoflip_messages.pb.h"
 #include "mediapipe/examples/desktop/autoflip/quality/cropping.pb.h"
 #include "mediapipe/examples/desktop/autoflip/quality/focus_point.pb.h"
-#include "mediapipe/framework/port/integral_types.h"
 #include "mediapipe/framework/port/status.h"
 
 namespace mediapipe {
@@ -43,7 +43,7 @@ namespace autoflip {
 //   SceneCameraMotionAnalyzer analyzer(options);
 //   SceneKeyFrameCropSummary scene_summary;
 //   std::vector<FocusPointFrame> focus_point_frames;
-//   CHECK_OK(analyzer.AnalyzeScenePopulateFocusPointFrames(
+//   ABSL_CHECK_OK(analyzer.AnalyzeScenePopulateFocusPointFrames(
 //       key_frame_crop_infos, key_frame_crop_options, key_frame_crop_results,
 //       scene_frame_width, scene_frame_height, scene_frame_timestamps,
 //       &scene_summary, &focus_point_frames));
@@ -55,7 +55,8 @@ class SceneCameraMotionAnalyzer {
                                          scene_camera_motion_analyzer_options)
       : options_(scene_camera_motion_analyzer_options),
         time_since_last_salient_region_us_(0),
-        has_solid_color_background_(false) {}
+        has_solid_color_background_(false),
+        total_scene_frames_(0) {}
 
   ~SceneCameraMotionAnalyzer() {}
 
@@ -66,7 +67,7 @@ class SceneCameraMotionAnalyzer {
       const KeyFrameCropOptions& key_frame_crop_options,
       const std::vector<KeyFrameCropResult>& key_frame_crop_results,
       const int scene_frame_width, const int scene_frame_height,
-      const std::vector<int64>& scene_frame_timestamps,
+      const std::vector<int64_t>& scene_frame_timestamps,
       const bool has_solid_color_background,
       SceneKeyFrameCropSummary* scene_summary,
       std::vector<FocusPointFrame>* focus_point_frames,
@@ -77,7 +78,7 @@ class SceneCameraMotionAnalyzer {
   // crop window in SceneKeyFrameCropSummary in the case of steady motion.
   absl::Status DecideCameraMotionType(
       const KeyFrameCropOptions& key_frame_crop_options,
-      const double scene_span_sec, const int64 end_time_us,
+      const double scene_span_sec, const int64_t end_time_us,
       SceneKeyFrameCropSummary* scene_summary,
       SceneCameraMotion* scene_camera_motion) const;
 
@@ -86,7 +87,7 @@ class SceneCameraMotionAnalyzer {
   absl::Status PopulateFocusPointFrames(
       const SceneKeyFrameCropSummary& scene_summary,
       const SceneCameraMotion& scene_camera_motion,
-      const std::vector<int64>& scene_frame_timestamps,
+      const std::vector<int64_t>& scene_frame_timestamps,
       std::vector<FocusPointFrame>* focus_point_frames) const;
 
  private:
@@ -117,7 +118,7 @@ class SceneCameraMotionAnalyzer {
   absl::Status PopulateFocusPointFramesForTracking(
       const SceneKeyFrameCropSummary& scene_summary,
       const FocusPointFrameType focus_point_frame_type,
-      const std::vector<int64>& scene_frame_timestamps,
+      const std::vector<int64_t>& scene_frame_timestamps,
       std::vector<FocusPointFrame>* focus_point_frames) const;
 
   // Decide to use steady motion.
@@ -141,7 +142,7 @@ class SceneCameraMotionAnalyzer {
 
   // Last position
   SceneCameraMotion last_scene_with_salient_region_;
-  int64 time_since_last_salient_region_us_;
+  int64_t time_since_last_salient_region_us_;
 
   // Scene has solid color background.
   bool has_solid_color_background_;

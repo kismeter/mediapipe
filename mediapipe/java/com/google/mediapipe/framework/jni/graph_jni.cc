@@ -14,13 +14,15 @@
 
 #include "mediapipe/java/com/google/mediapipe/framework/jni/graph_jni.h"
 
+#include <jni.h>
+
+#include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
+#include "absl/status/status.h"
 #include "mediapipe/framework/calculator_framework.h"
-#include "mediapipe/framework/port/canonical_errors.h"
-#include "mediapipe/framework/port/logging.h"
-#include "mediapipe/java/com/google/mediapipe/framework/jni/class_registry.h"
 #include "mediapipe/java/com/google/mediapipe/framework/jni/graph.h"
 #include "mediapipe/java/com/google/mediapipe/framework/jni/jni_util.h"
 
@@ -96,7 +98,7 @@ JNIEXPORT void JNICALL GRAPH_METHOD(nativeLoadBinaryGraph)(JNIEnv* env,
   mediapipe::android::Graph* mediapipe_graph =
       reinterpret_cast<mediapipe::android::Graph*>(context);
   const char* path_ref = env->GetStringUTFChars(path, nullptr);
-  // Make a copy of the std::string and release the jni reference.
+  // Make a copy of the string and release the jni reference.
   std::string path_to_graph(path_ref);
   env->ReleaseStringUTFChars(path, path_ref);
   ThrowIfError(env, mediapipe_graph->LoadBinaryGraph(path_to_graph));
@@ -133,7 +135,7 @@ JNIEXPORT void JNICALL GRAPH_METHOD(nativeSetGraphType)(JNIEnv* env,
   mediapipe::android::Graph* mediapipe_graph =
       reinterpret_cast<mediapipe::android::Graph*>(context);
   const char* graph_type_ref = env->GetStringUTFChars(graph_type, nullptr);
-  // Make a copy of the std::string and release the jni reference.
+  // Make a copy of the string and release the jni reference.
   std::string graph_type_string(graph_type_ref);
   env->ReleaseStringUTFChars(graph_type, graph_type_ref);
   ThrowIfError(env, mediapipe_graph->SetGraphType(graph_type_string));
@@ -200,7 +202,7 @@ JNIEXPORT void JNICALL GRAPH_METHOD(nativeAddMultiStreamCallback)(
     if (s.empty()) {
       ThrowIfError(env,
                    absl::InternalError("streamNames is not correctly parsed or "
-                                       "it contains empty std::string."));
+                                       "it contains empty string."));
       return;
     }
   }
@@ -364,7 +366,11 @@ JNIEXPORT void JNICALL GRAPH_METHOD(nativeCancelGraph)(JNIEnv* env,
 JNIEXPORT jlong JNICALL GRAPH_METHOD(nativeGetProfiler)(JNIEnv* env,
                                                         jobject thiz,
                                                         jlong context) {
+#ifdef MEDIAPIPE_PROFILER_AVAILABLE
   mediapipe::android::Graph* mediapipe_graph =
       reinterpret_cast<mediapipe::android::Graph*>(context);
   return reinterpret_cast<jlong>(mediapipe_graph->GetProfilingContext());
+#else
+  return 0;
+#endif  // MEDIAPIPE_PROFILER_AVAILABLE
 }

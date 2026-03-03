@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "//mediapipe/framework/tool:mediapipe_graph.bzl",
     "mediapipe_binary_graph",
@@ -24,6 +25,7 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "pose_tracking_gpu_deps",
     deps = [
+        "//mediapipe/calculators/core:constant_side_packet_calculator",
         "//mediapipe/calculators/core:flow_limiter_calculator",
         "//mediapipe/graphs/pose_tracking/subgraphs:pose_renderer_gpu",
         "//mediapipe/modules/pose_landmark:pose_landmark_gpu",
@@ -40,6 +42,7 @@ mediapipe_binary_graph(
 cc_library(
     name = "pose_tracking_cpu_deps",
     deps = [
+        "//mediapipe/calculators/core:constant_side_packet_calculator",
         "//mediapipe/calculators/core:flow_limiter_calculator",
         "//mediapipe/graphs/pose_tracking/subgraphs:pose_renderer_cpu",
         "//mediapipe/modules/pose_landmark:pose_landmark_cpu",

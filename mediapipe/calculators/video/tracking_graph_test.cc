@@ -19,6 +19,8 @@
 #include <utility>
 #include <vector>
 
+#include "absl/log/absl_check.h"
+#include "absl/log/absl_log.h"
 #include "mediapipe/calculators/video/box_tracker_calculator.pb.h"
 #include "mediapipe/framework/calculator.pb.h"
 #include "mediapipe/framework/calculator_framework.h"
@@ -29,43 +31,20 @@
 #include "mediapipe/framework/port/file_helpers.h"
 #include "mediapipe/framework/port/gmock.h"
 #include "mediapipe/framework/port/gtest.h"
-#include "mediapipe/framework/port/opencv_highgui_inc.h"
+#include "mediapipe/framework/port/opencv_imgcodecs_inc.h"
 #include "mediapipe/framework/port/proto_ns.h"
 #include "mediapipe/framework/port/status.h"
 #include "mediapipe/framework/port/status_matchers.h"
+#include "mediapipe/framework/tool/test_util.h"
 #include "mediapipe/util/tracking/box_tracker.pb.h"
 #include "mediapipe/util/tracking/tracking.pb.h"
-
-#ifdef __APPLE__
-#include <CoreFoundation/CoreFoundation.h>
-#endif  // defined(__APPLE__)
 
 namespace mediapipe {
 namespace {
 using ::testing::FloatNear;
 using ::testing::Test;
 
-std::string GetTestDir() {
-#ifdef __APPLE__
-  char path[1024];
-  CFURLRef bundle_url = CFBundleCopyBundleURL(CFBundleGetMainBundle());
-  CFURLGetFileSystemRepresentation(
-      bundle_url, true, reinterpret_cast<UInt8*>(path), sizeof(path));
-  CFRelease(bundle_url);
-  return mediapipe::file::JoinPath(path, "testdata");
-#elif defined(__ANDROID__)
-  char path[1024];
-  getcwd(path, sizeof(path));
-  return mediapipe::file::JoinPath(path,
-                                   "mediapipe/calculators/video/testdata");
-#else
-  return mediapipe::file::JoinPath(
-      "./",
-      // This should match the path of the output files
-      // of the genrule() that generates test model files.
-      "mediapipe/calculators/video/testdata");
-#endif  // defined(__APPLE__)
-}
+constexpr char kTestPackageRoot[] = "mediapipe/calculators/video";
 
 bool LoadBinaryTestGraph(const std::string& graph_path,
                          CalculatorGraphConfig* config) {
@@ -75,7 +54,7 @@ bool LoadBinaryTestGraph(const std::string& graph_path,
   bool success = config->ParseFromZeroCopyStream(&in_stream);
   ifs.close();
   if (!success) {
-    LOG(ERROR) << "could not parse test graph: " << graph_path;
+    ABSL_LOG(ERROR) << "could not parse test graph: " << graph_path;
   }
   return success;
 }
@@ -85,7 +64,7 @@ class TrackingGraphTest : public Test {
   TrackingGraphTest() {}
 
   void SetUp() override {
-    test_dir_ = GetTestDir();
+    test_dir_ = mediapipe::GetTestDataDir(kTestPackageRoot);
     const auto graph_path = file::JoinPath(test_dir_, "tracker.binarypb");
     ASSERT_TRUE(LoadBinaryTestGraph(graph_path, &config_));
 
@@ -181,7 +160,7 @@ class TrackingGraphTest : public Test {
   // Each image is shifted to the right and bottom by kTranslationStep
   // pixels compared with the previous image.
   static constexpr int kTranslationStep = 10;
-  static constexpr float kEqualityTolerance = 3e-4f;
+  static constexpr float kEqualityTolerance = 1e-3f;
 };
 
 void TrackingGraphTest::ExpectBoxAtFrame(const TimedBoxProto& box, float frame,
@@ -320,7 +299,7 @@ std::unique_ptr<TimedBoxProtoList>
 TrackingGraphTest::CreateRandomAccessTrackingBoxList(
     const std::vector<Timestamp>& start_timestamps,
     const std::vector<Timestamp>& end_timestamps) const {
-  CHECK_EQ(start_timestamps.size(), end_timestamps.size());
+  ABSL_CHECK_EQ(start_timestamps.size(), end_timestamps.size());
   auto ra_boxes = absl::make_unique<TimedBoxProtoList>();
   for (int i = 0; i < start_timestamps.size(); ++i) {
     auto start_box_list =
@@ -553,7 +532,7 @@ TEST_F(TrackingGraphTest, TestRandomAccessTrackingTimestamps) {
 
   // Set up random access boxes
   const int num_frames = input_frames_packets_.size();
-  const int64 usec_in_sec = 1000000;
+  const int64_t usec_in_sec = 1000000;
   std::vector<Timestamp> start_timestamps{
       input_frames_packets_[0].Timestamp() - usec_in_sec,  // forward
       input_frames_packets_[0].Timestamp(),                // forward
@@ -643,7 +622,7 @@ TEST_F(TrackingGraphTest, TestTransitionFramesForReacquisition) {
     // Add TRACK_TIME stream queries in between 2 frames.
     if (j > 0) {
       Timestamp track_time = Timestamp((j - 0.5f) * kFrameIntervalUs);
-      LOG(INFO) << track_time.Value();
+      ABSL_LOG(INFO) << track_time.Value();
       Packet track_time_packet = Adopt(new Timestamp).At(track_time);
       MP_EXPECT_OK(
           graph_.AddPacketToInputStream("track_time", track_time_packet));

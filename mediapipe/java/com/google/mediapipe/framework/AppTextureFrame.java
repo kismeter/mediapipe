@@ -26,18 +26,27 @@ package com.google.mediapipe.framework;
  * MediaPipe).
  */
 public class AppTextureFrame implements TextureFrame {
-  private int textureName;
-  private int width;
-  private int height;
+   /** Default format for textures (GL_RGBA). */
+  private static final int DEFAULT_FORMAT = 0x1908;
+
+  private final int textureName;
+  private final int width;
+  private final int height;
+  private final int format;
   private long timestamp = Long.MIN_VALUE;
   private boolean inUse = false;
   private boolean legacyInUse = false;  // This ignores GL context sync.
   private GlSyncToken releaseSyncToken = null;
 
   public AppTextureFrame(int textureName, int width, int height) {
+    this(textureName, width, height, DEFAULT_FORMAT);
+  }
+
+  public AppTextureFrame(int textureName, int width, int height, int format) {
     this.textureName = textureName;
     this.width = width;
     this.height = height;
+    this.format = format;
   }
 
   public void setTimestamp(long timestamp) {
@@ -64,21 +73,63 @@ public class AppTextureFrame implements TextureFrame {
     return timestamp;
   }
 
+  @Override
+  public int getFormat() {
+    return format;
+  }
+
+  /** Returns true if a call to waitUntilReleased() would block waiting for release. */
+  public boolean isNotYetReleased() {
+    synchronized (this) {
+      return inUse && releaseSyncToken == null;
+    }
+  }
+
   /**
    * Waits until the consumer is done with the texture.
-   * @throws InterruptedException
+   *
+   * <p>This does a CPU wait for the texture to be complete.
+   * Use {@link waitUntilReleasedWithGpuSync} whenever possible.
    */
   public void waitUntilReleased() throws InterruptedException {
+    GlSyncToken tokenToRelease = null;
     synchronized (this) {
       while (inUse && releaseSyncToken == null) {
         wait();
       }
       if (releaseSyncToken != null) {
-        releaseSyncToken.waitOnCpu();
-        releaseSyncToken.release();
+        tokenToRelease = releaseSyncToken;
         inUse = false;
         releaseSyncToken = null;
       }
+    }
+    if (tokenToRelease != null) {
+      tokenToRelease.waitOnCpu();
+      tokenToRelease.release();
+    }
+  }
+
+  /**
+   * Waits until the consumer is done with the texture.
+   *
+   * <p>This method must be called within the application's GL context that will overwrite the
+   * TextureFrame.
+   */
+  public void waitUntilReleasedWithGpuSync() throws InterruptedException {
+    GlSyncToken tokenToRelease = null;
+    synchronized (this) {
+      while (inUse && releaseSyncToken == null) {
+        wait();
+      }
+      if (releaseSyncToken != null) {
+        tokenToRelease = releaseSyncToken;
+        inUse = false;
+        releaseSyncToken = null;
+      }
+    }
+    if (tokenToRelease != null) {
+      tokenToRelease.waitOnGpu();
+      tokenToRelease.release();
     }
   }
 
@@ -143,6 +194,7 @@ public class AppTextureFrame implements TextureFrame {
     }
   }
 
+  @SuppressWarnings("Finalize")
   @Override
   public void finalize() {
     // Note: we do not normally want to rely on finalize to dispose of native objects. In this

@@ -1,4 +1,3 @@
-
 // Copyright 2019 The MediaPipe Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,16 +14,16 @@
 
 #include "mediapipe/calculators/util/filter_collection_calculator.h"
 
+#include <cstdint>
 #include <vector>
 
 #include "mediapipe/framework/formats/classification.pb.h"
 #include "mediapipe/framework/formats/landmark.pb.h"
 #include "mediapipe/framework/formats/rect.pb.h"
-#include "mediapipe/framework/port/integral_types.h"
 
 namespace mediapipe {
 
-typedef FilterCollectionCalculator<std::vector<uint64>>
+typedef FilterCollectionCalculator<std::vector<uint64_t>>
     FilterUInt64CollectionCalculator;
 REGISTER_CALCULATOR(FilterUInt64CollectionCalculator);
 
@@ -32,10 +31,14 @@ typedef FilterCollectionCalculator<std::vector<::mediapipe::NormalizedRect>>
     FilterNormalizedRectCollectionCalculator;
 REGISTER_CALCULATOR(FilterNormalizedRectCollectionCalculator);
 
-typedef FilterCollectionCalculator<
-    std::vector<::mediapipe::NormalizedLandmarkList>>
+typedef FilterCollectionCalculator<std::vector<::mediapipe::LandmarkList>>
     FilterLandmarkListCollectionCalculator;
 REGISTER_CALCULATOR(FilterLandmarkListCollectionCalculator);
+
+typedef FilterCollectionCalculator<
+    std::vector<::mediapipe::NormalizedLandmarkList>>
+    FilterNormalizedLandmarkListCollectionCalculator;
+REGISTER_CALCULATOR(FilterNormalizedLandmarkListCollectionCalculator);
 
 typedef FilterCollectionCalculator<std::vector<::mediapipe::ClassificationList>>
     FilterClassificationListCollectionCalculator;
