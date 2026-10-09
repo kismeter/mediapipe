@@ -245,6 +245,7 @@ cc_library(
         "@com_google_absl//absl/log:absl_log",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
     ] + select({
         "//conditions:default": [
         ],
@@ -391,7 +392,9 @@ cc_library(
     name = "yuv_image",
     hdrs = ["yuv_image.h"],
     deps = [
-        "//mediapipe/framework/port:integral_types",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/functional:any_invocable",
+        "@com_google_absl//absl/types:span",
         "@libyuv",
     ],
 )
@@ -568,7 +571,10 @@ config_setting(
         "MEDIAPIPE_NO_JNI": "1",
     },
     values = {"crosstool_top": "//external:android/crosstool"},
-    visibility = ["//mediapipe/framework:__pkg__"],
+    visibility = [
+        "//mediapipe/framework:__pkg__",
+        "//mediapipe/gpu:__pkg__",
+    ],
 )
 
 cc_library(
@@ -684,6 +690,7 @@ cc_test(
     ],
     deps = [
         ":tensor",
+        "//mediapipe/framework:memory_manager",
         "//mediapipe/framework:port",
         "//mediapipe/framework/port:gtest_main",
     ] + select({
@@ -770,6 +777,7 @@ cc_test(
         ":tensor",
         ":tensor_opencv",
         "//mediapipe/framework/port:gtest_main",
+        "//mediapipe/framework/port:opencv_core",
         "@com_google_absl//absl/status",
     ],
 )
@@ -790,6 +798,8 @@ cc_test(
     deps = [
         ":yuv_image",
         "//mediapipe/framework/port:gtest_main",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/types:span",
         "@libyuv",
     ],
 )
