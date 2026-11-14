@@ -31,7 +31,7 @@ limitations under the License.
 #include <utility>
 #include <variant>
 
-#include "absl/log/absl_log.h"
+#include "absl/log/absl_log.h"  // from @com_google_absl
 #include "mediapipe/calculators/tensor/inference_calculator.pb.h"
 #include "mediapipe/tasks/cc/core/proto/acceleration.pb.h"
 #include "mediapipe/tasks/cc/core/proto/base_options.pb.h"
@@ -53,6 +53,8 @@ ProtoGpu::Precision ConvertGpuPrecisionToProto(
       return ProtoGpu::FP16;
     case BaseOptions::GpuOptions::Precision::FP32:
       return ProtoGpu::FP32;
+    case BaseOptions::GpuOptions::Precision::FP16_WITH_FP32_ACCUM:
+      return ProtoGpu::FP16_WITH_FP32_ACCUM;
   }
   return ProtoGpu::DEFAULT;
 }
@@ -66,6 +68,8 @@ BaseOptions::GpuOptions::Precision ConvertProtoToGpuPrecision(
       return BaseOptions::GpuOptions::Precision::FP16;
     case ProtoGpu::FP32:
       return BaseOptions::GpuOptions::Precision::FP32;
+    case ProtoGpu::FP16_WITH_FP32_ACCUM:
+      return BaseOptions::GpuOptions::Precision::FP16_WITH_FP32_ACCUM;
   }
   return BaseOptions::GpuOptions::Precision::DEFAULT;
 }

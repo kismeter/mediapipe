@@ -19,23 +19,23 @@
 #include <string>
 #include <vector>
 
-#include "absl/flags/flag.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/str_format.h"
-#include "absl/strings/str_join.h"
-#include "absl/types/span.h"
+#include "absl/flags/flag.h"            // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
+#include "absl/strings/str_cat.h"       // from @com_google_absl
+#include "absl/strings/str_format.h"    // from @com_google_absl
+#include "absl/strings/str_join.h"      // from @com_google_absl
+#include "absl/types/span.h"            // from @com_google_absl
 #include "mediapipe/calculators/tensor/inference_calculator.pb.h"
 #include "mediapipe/framework/formats/tensor.h"
 #include "mediapipe/framework/memory_manager.h"
 #include "mediapipe/framework/port.h"  // NOLINT: provides MEDIAPIPE_ANDROID/IOS
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status_macros.h"
-#include "tflite/c/common.h"
-#include "tflite/interpreter.h"
-#include "tflite/portable_type_to_tflitetype.h"
-#include "tflite/string_util.h"
+#include "tflite/c/common.h"                     // from @litert
+#include "tflite/interpreter.h"                  // from @litert
+#include "tflite/portable_type_to_tflitetype.h"  // from @litert
+#include "tflite/string_util.h"                  // from @litert
 
 ABSL_FLAG(int, xnnpack_default_num_threads, 0,
           "Default number of xnnpack threads to use. If unset, determines a "

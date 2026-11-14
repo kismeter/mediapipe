@@ -25,7 +25,6 @@ cc_library(
     deps = [
         "//mediapipe/framework:timestamp",
         "//mediapipe/framework/formats:matrix",
-        "//mediapipe/framework/port:status",
         "//mediapipe/tasks/cc/components/containers:embedding_result",
         "//mediapipe/tasks/cc/components/processors:embedder_options",
         "//mediapipe/tasks/cc/core:base_options",
@@ -34,6 +33,7 @@ cc_library(
         "//mediapipe/tasks/cc/core/logging:tasks_logger",
         "//mediapipe/tasks/cc/core/logging/factory:logging_factory_hdr",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_macros",
         "@com_google_absl//absl/status:statusor",
         "@litert_lm//runtime/core:embedding_engine_impl",
         "@litert_lm//runtime/engine:embedding_engine",

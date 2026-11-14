@@ -4,24 +4,25 @@
 #include <string>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
 #include "mediapipe/framework/deps/file_path.h"
 #include "mediapipe/framework/packet.h"
 #include "mediapipe/framework/port/gmock.h"
 #include "mediapipe/framework/port/gtest.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/framework/port/status_matchers.h"
 #include "mediapipe/framework/resources.h"
 #include "mediapipe/util/tflite/tflite_model_loader.h"
-#include "tflite/interpreter.h"
-#include "tflite/interpreter_builder.h"
-#include "tflite/kernels/register.h"
-#include "tflite/test_util.h"
+#include "tflite/interpreter.h"          // from @litert
+#include "tflite/interpreter_builder.h"  // from @litert
+#include "tflite/kernels/register.h"     // from @litert
+#include "tflite/test_util.h"            // from @litert
 
 namespace mediapipe {
 namespace {
 
+using ::absl_testing::StatusIs;
 using ::testing::HasSubstr;
 using ::tflite::ops::builtin::BuiltinOpResolverWithoutDefaultDelegates;
 using ::tflite::testing::Test;

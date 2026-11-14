@@ -23,15 +23,15 @@ limitations under the License.
 #include <variant>
 #include <vector>
 
-#include "absl/cleanup/cleanup.h"
-#include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
-#include "absl/memory/memory.h"
-#include "absl/status/status.h"
-#include "absl/status/status_macros.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/string_view.h"
+#include "absl/cleanup/cleanup.h"          // from @com_google_absl
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/container/flat_hash_set.h"  // from @com_google_absl
+#include "absl/memory/memory.h"            // from @com_google_absl
+#include "absl/status/status.h"            // from @com_google_absl
+#include "absl/status/status_macros.h"     // from @com_google_absl
+#include "absl/status/statusor.h"          // from @com_google_absl
+#include "absl/strings/str_cat.h"          // from @com_google_absl
+#include "absl/strings/string_view.h"      // from @com_google_absl
 #include "mediapipe/framework/timestamp.h"
 #include "mediapipe/tasks/cc/core/embedding_provider.h"
 #include "mediapipe/tasks/cc/core/logging/factory/logging_factory.h"
@@ -93,7 +93,13 @@ absl::StatusOr<std::unique_ptr<SemanticRetriever>> SemanticRetriever::Create(
 
   auto tasks_logger = core::logging::CreateTasksLogger(
       {.task_name = "SemanticRetriever",
-       .task_running_mode = core::RunningMode::kUnspecified});
+       .task_running_mode = core::RunningMode::kUnspecified,
+       .host_environment = components.base_options.host_environment,
+       .host_system = components.base_options.host_system,
+       .host_version = components.base_options.host_version,
+       .app_id = components.base_options.app_id,
+       .app_version = components.base_options.app_version,
+       .ca_bundle_path = components.base_options.ca_bundle_path});
   tasks_logger->LogSessionStart();
 
   std::unique_ptr<TextChunker> text_chunker =
@@ -323,8 +329,11 @@ absl::StatusOr<std::vector<MemoryRecord>> SemanticRetriever::Retrieve(
     tasks_logger_->RecordInvocationEnd(task_logger_ts);
   };
 
+  ABSL_ASSIGN_OR_RETURN(std::vector<core::TaskPart> resolved_query,
+                        FillTaskParts(query_content));
+
   ABSL_ASSIGN_OR_RETURN(auto embedding_opt,
-                        embedding_provider_->EmbedContent(query_content));
+                        embedding_provider_->EmbedContent(resolved_query));
   if (!embedding_opt.has_value() || embedding_opt->empty()) {
     return absl::InternalError("Failed to extract query embedding.");
   }

@@ -200,7 +200,7 @@ public final class PoseLandmarker extends BaseVisionTaskApi {
         TaskRunner.create(
             context,
             TaskInfo.<PoseLandmarkerOptions>builder()
-                .setTaskName(PoseLandmarker.class.getSimpleName())
+                .setTaskName("PoseLandmarker")
                 .setTaskRunningModeName(landmarkerOptions.runningMode().name())
                 .setTaskGraphName(TASK_GRAPH_NAME)
                 .setInputStreams(INPUT_STREAMS)
@@ -484,7 +484,7 @@ public final class PoseLandmarker extends BaseVisionTaskApi {
               .setBaseOptions(
                   BaseOptionsProto.BaseOptions.newBuilder()
                       .setUseStreamMode(runningMode() != RunningMode.IMAGE)
-                      .mergeFrom(convertBaseOptionsToProto(baseOptions()))
+                      .mergeFrom(convertBaseOptionsToProto(baseOptions(), /* useLiteRt= */ true))
                       .build());
 
       // Setup PoseDetectorGraphOptions.

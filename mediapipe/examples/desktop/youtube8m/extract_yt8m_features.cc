@@ -16,17 +16,21 @@
 // from files provided via the command line and output side packets are written
 // to disk.
 #include <cstdlib>
+#include <map>
+#include <string>
+#include <vector>
 
-#include "absl/flags/flag.h"
-#include "absl/flags/parse.h"
-#include "absl/log/absl_log.h"
-#include "absl/strings/str_split.h"
+#include "absl/flags/flag.h"            // from @com_google_absl
+#include "absl/flags/parse.h"           // from @com_google_absl
+#include "absl/log/absl_log.h"          // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/strings/str_split.h"     // from @com_google_absl
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/formats/matrix.h"
 #include "mediapipe/framework/port/file_helpers.h"
-#include "mediapipe/framework/port/map_util.h"
 #include "mediapipe/framework/port/parse_text_proto.h"
-#include "mediapipe/framework/port/status.h"
+#include "mediapipe/framework/port/ret_check.h"
 
 ABSL_FLAG(std::string, calculator_graph_config_file, "",
           "Name of file containing text format CalculatorGraphConfig proto.");

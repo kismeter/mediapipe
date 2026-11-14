@@ -15,9 +15,10 @@ limitations under the License.
 
 #include <string>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
+#include "absl/strings/string_view.h"   // from @com_google_absl
 #include "mediapipe/framework/api2/builder.h"
 #include "mediapipe/framework/api2/stream/split.h"
 #include "mediapipe/framework/calculator_framework.h"
@@ -26,7 +27,6 @@ limitations under the License.
 #include "mediapipe/framework/formats/landmark.pb.h"
 #include "mediapipe/framework/formats/rect.pb.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/tasks/cc/core/model_asset_bundle_resources.h"
 #include "mediapipe/tasks/cc/core/model_resources_cache.h"
 #include "mediapipe/tasks/cc/core/model_task_graph.h"
@@ -387,6 +387,14 @@ class HolisticLandmarkerGraph : public core::ModelTaskGraph {
             holistic_options->mutable_face_landmarks_detector_graph_options()
                 ->mutable_face_blendshapes_graph_options(),
             kFaceBlendshapesModelName, create_copy));
+        // The blendshapes model is not supported by the GPU delegate (it fails
+        // with a batch size mismatch), so always run it on CPU with XNNPACK,
+        // consistent with FaceLandmarkerGraph.
+        holistic_options->mutable_face_landmarks_detector_graph_options()
+            ->mutable_face_blendshapes_graph_options()
+            ->mutable_base_options()
+            ->mutable_acceleration()
+            ->mutable_xnnpack();
       }
     }
 

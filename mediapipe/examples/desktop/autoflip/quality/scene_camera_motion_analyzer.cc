@@ -17,14 +17,15 @@
 #include <cstdint>
 #include <limits>
 
-#include "absl/memory/memory.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/str_format.h"
+#include "absl/memory/memory.h"         // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"       // from @com_google_absl
+#include "absl/strings/str_format.h"    // from @com_google_absl
 #include "mediapipe/examples/desktop/autoflip/quality/math_utils.h"
 #include "mediapipe/examples/desktop/autoflip/quality/piecewise_linear_function.h"
 #include "mediapipe/examples/desktop/autoflip/quality/utils.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status.h"
 #include "mediapipe/framework/timestamp.h"
 
 namespace mediapipe {
@@ -367,7 +368,8 @@ absl::Status SceneCameraMotionAnalyzer::PopulateFocusPointFrames(
         scene_summary, focus_point_frame_type, scene_frame_timestamps,
         focus_point_frames);
   } else {
-    return absl::Status(StatusCode::kInvalidArgument, "Unknown motion type.");
+    return absl::Status(absl::StatusCode::kInvalidArgument,
+                        "Unknown motion type.");
   }
 }
 

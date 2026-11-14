@@ -17,8 +17,9 @@ limitations under the License.
 #include <optional>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
 #include "mediapipe/framework/api2/builder.h"
 #include "mediapipe/framework/api2/port.h"
 #include "mediapipe/framework/calculator_framework.h"
@@ -27,11 +28,10 @@ limitations under the License.
 #include "mediapipe/framework/port/gmock.h"
 #include "mediapipe/framework/port/gtest.h"
 #include "mediapipe/framework/port/parse_text_proto.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/framework/port/status_matchers.h"
 #include "mediapipe/framework/timestamp.h"
 #include "mediapipe/tasks/cc/components/containers/proto/embeddings.pb.h"
-#include "tflite/test_util.h"
+#include "tflite/test_util.h"  // from @litert
 
 namespace mediapipe {
 namespace {

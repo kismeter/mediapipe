@@ -40,16 +40,16 @@ typedef struct MpUniversalEmbedderInternal* MpUniversalEmbedderPtr;
 typedef struct MpEmbeddingResult MpUniversalEmbedderResult;
 
 // Activation data type for model execution.
-enum MpActivationDataType {
+typedef enum MpActivationDataType {
   kMpActivationDataTypeDefault = 0,
   kMpActivationDataTypeFloat32 = 1,
   kMpActivationDataTypeFloat16 = 2,
   kMpActivationDataTypeInt16 = 3,
   kMpActivationDataTypeInt8 = 4,
-};
+} MpActivationDataType;
 
 // Options for configuring a MediaPipe Universal Embedder task.
-struct MpUniversalEmbedderOptions {
+typedef struct MpUniversalEmbedderOptions {
   // Base options for configuring MediaPipe Tasks, such as specifying the model
   // file with metadata, accelerator options, op resolver, etc.
   struct MpBaseOptions base_options;
@@ -70,7 +70,50 @@ struct MpUniversalEmbedderOptions {
 
   // Optional directory path for storing compiled model cache artifacts.
   const char* cache_dir;
-};
+
+  // Optional per-modality delegates. If 0 (MP_DELEGATE_DEFAULT), uses
+  // base_options.delegate.
+  enum MpDelegate text_delegate;
+  enum MpDelegate vision_delegate;
+  enum MpDelegate audio_delegate;
+} MpUniversalEmbedderOptions;
+
+// Type of part for multi-modal embedding content.
+typedef enum MpUniversalEmbedderPartType {
+  kMpUniversalEmbedderPartTypeText = 1,
+  kMpUniversalEmbedderPartTypeImage = 2,
+  kMpUniversalEmbedderPartTypeAudio = 3,
+} MpUniversalEmbedderPartType;
+
+// Compressed image bytes (JPEG, PNG, TGA, etc.) for an image content part.
+typedef struct MpUniversalEmbedderImagePart {
+  const char* bytes;
+  int size;
+} MpUniversalEmbedderImagePart;
+
+// PCM float audio samples for an audio content part.
+typedef struct MpUniversalEmbedderAudioPart {
+  const float* samples;
+  int size;
+} MpUniversalEmbedderAudioPart;
+
+// Payload union for a multi-modal content part.
+typedef union MpUniversalEmbedderPartValue {
+  // UTF-8 string when type == kMpUniversalEmbedderPartTypeText.
+  const char* text;
+
+  // Compressed image bytes when type == kMpUniversalEmbedderPartTypeImage.
+  MpUniversalEmbedderImagePart image;
+
+  // PCM float audio samples when type == kMpUniversalEmbedderPartTypeAudio.
+  MpUniversalEmbedderAudioPart audio;
+} MpUniversalEmbedderPartValue;
+
+// Represents a single part in a multi-modal content block.
+typedef struct MpUniversalEmbedderPart {
+  MpUniversalEmbedderPartType type;
+  MpUniversalEmbedderPartValue value;
+} MpUniversalEmbedderPart;
 
 // Creates a UniversalEmbedder from the provided `options`.
 // If successful, returns `kMpOk` and sets `*embedder` to the new
@@ -142,6 +185,19 @@ MP_EXPORT MpStatus MpUniversalEmbedderEmbedAudio(
 // `MpErrorFree()`.
 MP_EXPORT MpStatus MpUniversalEmbedderEmbedMpAudioData(
     MpUniversalEmbedderPtr embedder, const struct MpAudioData* audio_data,
+    MpUniversalEmbedderResult* result, char** error_msg);
+
+// Performs embedding extraction on multi-modal parts of a content block.
+// If successful, returns `kMpOk` and sets `*result` to the new
+// `MpUniversalEmbedderResult`.
+//
+// To obtain a detailed error, `error_msg` must be non-null pointer to a
+// `char*`, which will be populated with a newly-allocated error message upon
+// failure. It's the caller responsibility to free the error message with
+// `MpErrorFree()`.
+MP_EXPORT MpStatus MpUniversalEmbedderEmbedContent(
+    MpUniversalEmbedderPtr embedder,
+    const struct MpUniversalEmbedderPart* parts, int parts_count,
     MpUniversalEmbedderResult* result, char** error_msg);
 
 // Frees the memory allocated inside a MpUniversalEmbedderResult result. Does

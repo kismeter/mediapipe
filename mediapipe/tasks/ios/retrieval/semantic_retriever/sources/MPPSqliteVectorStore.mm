@@ -22,13 +22,55 @@
 #include <utility>
 #include <vector>
 
-#include "absl/container/flat_hash_map.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
 #include "mediapipe/tasks/cc/retrieval/semantic_retriever/proto/memory.pb.h"
 #include "mediapipe/tasks/cc/retrieval/semantic_retriever/proto/vector_stores.pb.h"
 #include "mediapipe/tasks/cc/retrieval/semantic_retriever/sqlite_memory_store.h"
 #include "mediapipe/tasks/cc/retrieval/semantic_retriever/sqlite_vector_store.h"
+
+/**
+ * Immutable `NSArray<NSNumber *>` backed by a contiguous `float` buffer so database records do not
+ * eagerly box floats into `NSNumber` objects unless elements are accessed.
+ */
+@interface MPPFloatEmbeddingArray : NSArray<NSNumber *>
+
+- (instancetype)initWithFloats:(nullable const float *)floats count:(NSUInteger)count;
+
+@end
+
+@implementation MPPFloatEmbeddingArray {
+  std::vector<float> _values;
+}
+
+- (instancetype)initWithFloats:(nullable const float *)floats count:(NSUInteger)count {
+  self = [super init];
+  if (self && floats != nullptr && count > 0) {
+    _values.assign(floats, floats + count);
+  }
+  return self;
+}
+
+- (NSUInteger)count {
+  return _values.size();
+}
+
+- (id)objectAtIndex:(NSUInteger)index {
+  if (index >= _values.size()) {
+    [NSException raise:NSRangeException
+                format:@"Index %lu beyond bounds [0 .. %lu]",
+                       static_cast<unsigned long>(index),
+                       static_cast<unsigned long>(_values.size())];
+  }
+  return @(_values[index]);
+}
+
+- (id)copyWithZone:(nullable NSZone *)zone {
+  return self;
+}
+
+@end
 
 @interface MPPSqliteVectorStore () {
   std::unique_ptr<mediapipe::tasks::retrieval::SqliteMemoryStore> _sqliteMemoryStore;
@@ -81,7 +123,7 @@
   return YES;
 }
 
-// Required by searchWithEmbedding:topK:error: because vector similarity search delegates to
+// Required by searchWithEmbedding:limit:error: because vector similarity search delegates to
 // SqliteMemoryStore::GetNearestRecords(), which returns mediapipe::tasks::retrieval::MemoryRecord
 // rather than raw database column values.
 - (MPPRetrievalRecord *)recordFromCppRecord:
@@ -108,11 +150,11 @@
     childIds = cIds;
   }
 
-  NSMutableArray<NSNumber *> *embeddings =
-      [NSMutableArray arrayWithCapacity:cppRecord.embeddings_size()];
-  for (int i = 0; i < cppRecord.embeddings_size(); ++i) {
-    [embeddings addObject:@(cppRecord.embeddings(i))];
-  }
+  NSArray<NSNumber *> *embeddings =
+      [[MPPFloatEmbeddingArray alloc] initWithFloats:cppRecord.embeddings().data()
+                                               count:cppRecord.embeddings_size()];
+  NSNumber *similarityScore =
+      cppRecord.has_similarity_score() ? @(cppRecord.similarity_score()) : nil;
 
   NSMutableArray<MPPTaskPart *> *content = [NSMutableArray array];
   for (const auto &cppPart : cppRecord.parts()) {
@@ -155,6 +197,7 @@
   return [[MPPRetrievalRecord alloc] initWithRecordId:recordId
                                               content:content
                                            embeddings:embeddings
+                                      similarityScore:similarityScore
                                              metadata:userMetadata
                                              parentId:parentId
                                              childIds:childIds];
@@ -263,9 +306,18 @@
 
 - (nullable NSArray<MPPRetrievalRecord *> *)searchWithEmbedding:
                                                 (NSArray<NSNumber *> *)queryEmbedding
+                                                          limit:(NSInteger)limit
+                                                          error:(NSError **)error {
+  return [self searchWithEmbedding:queryEmbedding limit:limit metadataFilter:nil error:error];
+}
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-implementations"
+- (nullable NSArray<MPPRetrievalRecord *> *)searchWithEmbedding:
+                                                (NSArray<NSNumber *> *)queryEmbedding
                                                            topK:(NSInteger)topK
                                                           error:(NSError **)error {
-  return [self searchWithEmbedding:queryEmbedding topK:topK metadataFilter:nil error:error];
+  return [self searchWithEmbedding:queryEmbedding limit:topK error:error];
 }
 
 - (nullable NSArray<MPPRetrievalRecord *> *)
@@ -273,15 +325,27 @@
                    topK:(NSInteger)topK
          metadataFilter:(nullable NSDictionary<NSString *, NSString *> *)metadataFilter
                   error:(NSError **)error {
+  return [self searchWithEmbedding:queryEmbedding
+                             limit:topK
+                    metadataFilter:metadataFilter
+                             error:error];
+}
+#pragma clang diagnostic pop
+
+- (nullable NSArray<MPPRetrievalRecord *> *)
+    searchWithEmbedding:(NSArray<NSNumber *> *)queryEmbedding
+                  limit:(NSInteger)limit
+         metadataFilter:(nullable NSDictionary<NSString *, NSString *> *)metadataFilter
+                  error:(NSError **)error {
   if (![self ensureDelegateWithError:error]) {
     return nil;
   }
 
-  if (queryEmbedding.count == 0 || topK <= 0) {
+  if (queryEmbedding.count == 0 || limit <= 0) {
     [MPPCommonUtils
         createCustomError:error
                  withCode:MPPTasksErrorCodeInvalidArgumentError
-              description:@"queryEmbedding must be non-empty and topK must be positive."];
+              description:@"queryEmbedding must be non-empty and limit must be positive."];
     return nil;
   }
 
@@ -307,7 +371,7 @@
   }
 
   auto cppRecordsStatus =
-      _sqliteMemoryStore->GetNearestRecords(cppEmbeddings, (int)topK, 0.0f, cppFilter);
+      _sqliteMemoryStore->GetNearestRecords(cppEmbeddings, (int)limit, 0.0f, cppFilter);
   if (![MPPCommonUtils checkCppError:cppRecordsStatus.status() toError:error]) {
     return nil;
   }

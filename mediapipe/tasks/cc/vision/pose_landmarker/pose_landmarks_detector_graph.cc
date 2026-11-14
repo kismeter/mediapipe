@@ -17,7 +17,9 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "absl/status/statusor.h"
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
 #include "mediapipe/calculators/core/constant_side_packet_calculator.pb.h"
 #include "mediapipe/calculators/core/split_vector_calculator.pb.h"
 #include "mediapipe/calculators/image/warp_affine_calculator.pb.h"

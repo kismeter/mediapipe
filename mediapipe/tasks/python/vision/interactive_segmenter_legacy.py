@@ -48,7 +48,7 @@ class MpRegionOfInterestC(ctypes.Structure):
 
   _fields_ = [
       ('format', ctypes.c_int),
-      ('keypoint', ctypes.POINTER(keypoint_c_module.MpNormalizedKeypointC)),
+      ('keypoint', keypoint_c_module.MpNormalizedKeypointC),
       ('scribble', ctypes.POINTER(keypoint_c_module.MpNormalizedKeypointC)),
       ('scribble_count', ctypes.c_uint32),
   ]
@@ -59,6 +59,7 @@ class MpInteractiveSegmenterLegacyOptionsC(ctypes.Structure):
 
   _fields_ = [
       ('base_options', base_options_c_module.MpBaseOptionsC),
+      ('display_names_locale', ctypes.c_char_p),
       ('output_confidence_masks', ctypes.c_bool),
       ('output_category_mask', ctypes.c_bool),
   ]
@@ -129,11 +130,8 @@ class InteractiveSegmenterLegacyOptions:
 
   Attributes:
     base_options: Base options for the interactive segmenter task.
-    running_mode: The running mode of the task.
     output_confidence_masks: Whether to output confidence masks.
     output_category_mask: Whether to output category mask.
-    result_callback: The callback function that is invoked synchronously when
-      the current thread is idle.
   """
 
   base_options: _BaseOptions
@@ -168,12 +166,12 @@ class RegionOfInterest:
       if self.format == RegionOfInterest.Format.UNSPECIFIED:
         raise ValueError('RegionOfInterest format not specified.')
       elif self.format == RegionOfInterest.Format.KEYPOINT:
-        c_roi = MpRegionOfInterestC(format=self.format.value)
         c_keypoint = keypoint_c_module.MpNormalizedKeypointC(
             x=self.keypoint.x, y=self.keypoint.y
         )
-        c_roi.keypoint = ctypes.pointer(c_keypoint)
-        return c_roi
+        return MpRegionOfInterestC(
+            format=self.format.value, keypoint=c_keypoint
+        )
       else:
         raise ValueError(
             'Please specify the Region-of-interest for segmentation.'

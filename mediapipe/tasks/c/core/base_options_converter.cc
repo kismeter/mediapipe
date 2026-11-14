@@ -17,8 +17,9 @@ limitations under the License.
 
 #include <memory>
 #include <string>
+#include <utility>
 
-#include "absl/log/absl_log.h"
+#include "absl/log/absl_log.h"  // from @com_google_absl
 #include "mediapipe/tasks/c/core/base_options.h"
 #include "mediapipe/tasks/cc/core/base_options.h"
 #include "mediapipe/tasks/cc/core/host_environment.h"
@@ -29,6 +30,7 @@ namespace {
 mediapipe::tasks::core::BaseOptions::Delegate CppConvertToDelegate(
     const MpDelegate& in) {
   switch (in) {
+    case MP_DELEGATE_DEFAULT:
     case MP_DELEGATE_CPU:
       return mediapipe::tasks::core::BaseOptions::Delegate::CPU;
     case MP_DELEGATE_GPU:
@@ -51,6 +53,11 @@ mediapipe::tasks::core::HostEnvironment CppConvertToHostEnvironment(
       return mediapipe::tasks::core::HostEnvironment::HOST_ENVIRONMENT_PYTHON;
     case MP_HOST_ENVIRONMENT_WEB:
       return mediapipe::tasks::core::HostEnvironment::HOST_ENVIRONMENT_WEB;
+    case MP_HOST_ENVIRONMENT_FLUTTER:
+      return mediapipe::tasks::core::HostEnvironment::HOST_ENVIRONMENT_FLUTTER;
+    case MP_HOST_ENVIRONMENT_FLUTTER_WEB:
+      return mediapipe::tasks::core::HostEnvironment::
+          HOST_ENVIRONMENT_FLUTTER_WEB;
     default:
       return mediapipe::tasks::core::HostEnvironment::HOST_ENVIRONMENT_UNKNOWN;
   }
@@ -96,6 +103,14 @@ void CppConvertToBaseOptions(const MpBaseOptions& in,
   out->model_asset_descriptor_meta.fd =
       in.file_descriptor != 0 ? in.file_descriptor : -1;
 
+  if (in.delegate == MP_DELEGATE_NPU &&
+      in.npu_dispatch_library_dir != nullptr &&
+      in.npu_dispatch_library_dir[0] != '\0') {
+    mediapipe::tasks::core::BaseOptions::NpuOptions npu_options;
+    npu_options.dispatch_library_directory = in.npu_dispatch_library_dir;
+    out->delegate_options = std::move(npu_options);
+  }
+
   // Don't load GPU service unless delegate is GPU.
   out->disable_default_service = (in.delegate != MP_DELEGATE_GPU);
 }
@@ -112,6 +127,10 @@ MpHostEnvironment ToMpHostEnvironment(int host_environment) {
       return MP_HOST_ENVIRONMENT_PYTHON;
     case MP_HOST_ENVIRONMENT_WEB:
       return MP_HOST_ENVIRONMENT_WEB;
+    case MP_HOST_ENVIRONMENT_FLUTTER:
+      return MP_HOST_ENVIRONMENT_FLUTTER;
+    case MP_HOST_ENVIRONMENT_FLUTTER_WEB:
+      return MP_HOST_ENVIRONMENT_FLUTTER_WEB;
     default:
       ABSL_LOG(DFATAL) << "Unknown MpHostEnvironment int value: "
                        << host_environment;

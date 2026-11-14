@@ -23,17 +23,17 @@
 #include <utility>
 #include <vector>
 
-#include "absl/memory/memory.h"
-#include "absl/strings/str_cat.h"
+#include "absl/memory/memory.h"    // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
 #include "mediapipe/framework/formats/image.h"
 #include "mediapipe/framework/formats/image_frame.h"
 #include "mediapipe/framework/formats/matrix.h"
 #include "mediapipe/framework/packet.h"
 #include "mediapipe/python/pybind/image_frame_util.h"
 #include "mediapipe/python/pybind/util.h"
-#include "pybind11/eigen.h"
-#include "pybind11/pybind11.h"
-#include "pybind11/stl.h"
+#include "pybind11/eigen.h"     // from @pybind11
+#include "pybind11/pybind11.h"  // from @pybind11
+#include "pybind11/stl.h"       // from @pybind11
 
 namespace mediapipe {
 namespace python {

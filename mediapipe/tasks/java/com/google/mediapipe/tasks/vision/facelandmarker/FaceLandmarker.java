@@ -129,8 +129,8 @@ public final class FaceLandmarker extends BaseVisionTaskApi {
    * {@link FaceLandmarkerOptions}.
    *
    * @param context an Android {@link Context}.
-   * @param modelBuffer a direct {@link ByteBuffer} or a {@link MappedByteBuffer} of the detection
-   *     model.
+   * @param modelAssetBuffer a direct {@link ByteBuffer} or a {@link MappedByteBuffer} of the
+   *     detection model.
    * @throws MediaPipeException if there is an error during {@link FaceLandmarker} creation.
    */
   public static FaceLandmarker createFromBuffer(
@@ -217,7 +217,7 @@ public final class FaceLandmarker extends BaseVisionTaskApi {
         TaskRunner.create(
             context,
             TaskInfo.<FaceLandmarkerOptions>builder()
-                .setTaskName(FaceLandmarker.class.getSimpleName())
+                .setTaskName("FaceLandmarker")
                 .setTaskRunningModeName(landmarkerOptions.runningMode().name())
                 .setTaskGraphName(TASK_GRAPH_NAME)
                 .setInputStreams(INPUT_STREAMS)

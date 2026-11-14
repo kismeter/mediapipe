@@ -18,12 +18,13 @@ limitations under the License.
 #include <optional>
 #include <utility>
 
-#include "absl/strings/str_format.h"
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/strings/str_format.h"    // from @com_google_absl
 #include "mediapipe/framework/api2/builder.h"
 #include "mediapipe/framework/calculator.pb.h"
 #include "mediapipe/framework/formats/image.h"
 #include "mediapipe/framework/formats/rect.pb.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/tasks/cc/core/utils.h"
 #include "mediapipe/tasks/cc/vision/core/image_processing_options.h"
 #include "mediapipe/tasks/cc/vision/core/running_mode.h"
@@ -208,6 +209,8 @@ absl::StatusOr<std::unique_ptr<ImageSegmenter>> ImageSegmenter::Create(
        .host_environment = options->base_options.host_environment,
        .host_system = options->base_options.host_system,
        .host_version = options->base_options.host_version,
+       .app_id = options->base_options.app_id,
+       .app_version = options->base_options.app_version,
        .ca_bundle_path = options->base_options.ca_bundle_path});
   if (!image_segmenter.ok()) {
     return image_segmenter.status();

@@ -189,7 +189,7 @@ public final class HandLandmarker extends BaseVisionTaskApi {
         TaskRunner.create(
             context,
             TaskInfo.<HandLandmarkerOptions>builder()
-                .setTaskName(HandLandmarker.class.getSimpleName())
+                .setTaskName("HandLandmarker")
                 .setTaskRunningModeName(landmarkerOptions.runningMode().name())
                 .setTaskGraphName(TASK_GRAPH_NAME)
                 .setInputStreams(INPUT_STREAMS)
@@ -492,7 +492,7 @@ public final class HandLandmarker extends BaseVisionTaskApi {
               .setBaseOptions(
                   BaseOptionsProto.BaseOptions.newBuilder()
                       .setUseStreamMode(runningMode() != RunningMode.IMAGE)
-                      .mergeFrom(convertBaseOptionsToProto(baseOptions()))
+                      .mergeFrom(convertBaseOptionsToProto(baseOptions(), /* useLiteRt= */ true))
                       .build());
 
       // Setup HandDetectorGraphOptions.

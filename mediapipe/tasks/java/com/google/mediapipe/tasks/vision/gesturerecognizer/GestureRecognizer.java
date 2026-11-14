@@ -198,7 +198,7 @@ public final class GestureRecognizer extends BaseVisionTaskApi {
         TaskRunner.create(
             context,
             TaskInfo.<GestureRecognizerOptions>builder()
-                .setTaskName(GestureRecognizer.class.getSimpleName())
+                .setTaskName("GestureRecognizer")
                 .setTaskRunningModeName(recognizerOptions.runningMode().name())
                 .setTaskGraphName(TASK_GRAPH_NAME)
                 .setInputStreams(INPUT_STREAMS)
@@ -503,7 +503,7 @@ public final class GestureRecognizer extends BaseVisionTaskApi {
               .setBaseOptions(
                   BaseOptionsProto.BaseOptions.newBuilder()
                       .setUseStreamMode(runningMode() != RunningMode.IMAGE)
-                      .mergeFrom(convertBaseOptionsToProto(baseOptions()))
+                      .mergeFrom(convertBaseOptionsToProto(baseOptions(), /* useLiteRt= */ true))
                       .build());
 
       // Setup HandDetectorGraphOptions.

@@ -19,11 +19,12 @@
 #include <string>
 #include <utility>
 
-#include "absl/log/absl_check.h"
-#include "absl/memory/memory.h"
-#include "absl/status/status.h"
-#include "absl/strings/substitute.h"
-#include "absl/synchronization/mutex.h"
+#include "absl/log/absl_check.h"         // from @com_google_absl
+#include "absl/memory/memory.h"          // from @com_google_absl
+#include "absl/status/status.h"          // from @com_google_absl
+#include "absl/status/status_macros.h"   // from @com_google_absl
+#include "absl/strings/substitute.h"     // from @com_google_absl
+#include "absl/synchronization/mutex.h"  // from @com_google_absl
 #include "google/protobuf/repeated_ptr_field.h"
 #include "mediapipe/framework/collection_item_id.h"
 #include "mediapipe/framework/input_stream_manager.h"
@@ -32,7 +33,6 @@
 #include "mediapipe/framework/packet_type.h"
 #include "mediapipe/framework/port/proto_ns.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/framework/timestamp.h"
 #include "mediapipe/framework/tool/tag_map.h"
 

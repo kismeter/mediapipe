@@ -22,9 +22,10 @@
 #include <utility>
 #include <vector>
 
-#include "absl/flags/flag.h"
-#include "absl/log/absl_check.h"
-#include "absl/time/time.h"
+#include "absl/flags/flag.h"      // from @com_google_absl
+#include "absl/log/absl_check.h"  // from @com_google_absl
+#include "absl/status/status.h"   // from @com_google_absl
+#include "absl/time/time.h"       // from @com_google_absl
 #include "mediapipe/framework/calculator.pb.h"
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/calculator_profile.pb.h"
@@ -35,7 +36,6 @@
 #include "mediapipe/framework/port/gtest.h"
 #include "mediapipe/framework/port/logging.h"
 #include "mediapipe/framework/port/parse_text_proto.h"
-#include "mediapipe/framework/port/status.h"
 #include "mediapipe/framework/port/status_matchers.h"
 #include "mediapipe/framework/profiler/graph_profiler.h"
 #include "mediapipe/framework/profiler/test_context_builder.h"

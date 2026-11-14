@@ -21,11 +21,12 @@
 #include <memory>
 #include <vector>
 
-#include "absl/log/absl_log.h"
+#include "absl/log/absl_log.h"          // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
 #include "mediapipe/framework/port/opencv_core_inc.h"
 #include "mediapipe/framework/port/opencv_imgproc_inc.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status.h"
 #include "mediapipe/framework/port/status_builder.h"
 
 // Weight threshold for computing a value.
@@ -116,7 +117,7 @@ absl::Status VisualScorer::CalculateColorfulness(const cv::Mat& image,
                                                  float* colorfulness) const {
   // Convert the image to HSV.
   cv::Mat image_hsv;
-  cv::cvtColor(image, image_hsv, CV_RGB2HSV);
+  cv::cvtColor(image, image_hsv, cv::COLOR_RGB2HSV);
 
   // Mask out pixels that are too dark or too bright.
   cv::Mat mask(image.rows, image.cols, CV_8UC1);

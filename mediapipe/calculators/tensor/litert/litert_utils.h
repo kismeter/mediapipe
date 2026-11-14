@@ -17,11 +17,12 @@
 
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/types/span.h"
+#include "absl/status/status.h"                    // from @com_google_absl
+#include "absl/status/statusor.h"                  // from @com_google_absl
+#include "absl/types/span.h"                       // from @com_google_absl
 #include "litert/cc/litert_environment.h"          // from @litert
 #include "litert/cc/litert_environment_options.h"  // from @litert
+#include "litert/cc/litert_model_types.h"          // from @litert
 #include "litert/cc/litert_ranked_tensor_type.h"   // from @litert
 #include "litert/cc/litert_tensor_buffer.h"        // from @litert
 #include "mediapipe/calculators/tensor/litert/litert_service.h"
@@ -49,12 +50,34 @@ absl::Status AreTensorSpecsCompatible(
 bool IsShapeCompatibleWithDynamicDims(const std::vector<int>& model_shape,
                                       const std::vector<int>& input_shape);
 
+// Returns true if any tensor of `signature` only gets its real shape at
+// runtime, in which case its buffers must be sized from the runtime layouts
+// reported by the compiled model instead of the declared tensor types.
+// This is the case for:
+//  - inputs with a dynamic (-1) dimension, when dynamic resizing is enabled,
+//    since the input tensor is resized to the MP input shape on every run;
+//  - outputs declared without a shape (rank 0). Some models end in ops that
+//    compute their output shape at runtime and are serialized with
+//    `shape=[]`; using the declared rank-0 type would collapse such outputs
+//    to a single element.
+absl::StatusOr<bool> HasDynamicDimension(
+    const litert::SimpleSignature& signature, bool enable_dynamic_resize);
+
 // Creates a tensor with the given LiteRt ranked tensor type. The tensor is
 // allocated using the given memory manager. The memory is aligned to the given
-// alignment.
+// alignment. `quantization_parameters` is attached to the tensor so that
+// downstream calculators (e.g. TensorsDequantizationCalculator) can dequantize
+// quantized outputs.
 absl::StatusOr<Tensor> CreateTensorFromLiteRtRankedTensorType(
     const litert::RankedTensorType& litert_tensor_type,
-    mediapipe::MemoryManager* memory_manager, int memory_allignment);
+    mediapipe::MemoryManager* memory_manager, int memory_allignment,
+    const Tensor::QuantizationParameters& quantization_parameters = {});
+
+// Returns the per-tensor quantization parameters of `litert_tensor`, or the
+// default (scale = 1, zero_point = 0) if the tensor is not per-tensor
+// quantized. Matches what the legacy TFLite runners attach to MP tensors.
+Tensor::QuantizationParameters GetMpQuantizationParameters(
+    const litert::SimpleTensor& litert_tensor);
 
 // Copies the data from a MP tensor to a LiteRT buffer.
 absl::Status CopyMpTensorToLiteRtBuffer(const Tensor& mp_tensor,
@@ -63,6 +86,14 @@ absl::Status CopyMpTensorToLiteRtBuffer(const Tensor& mp_tensor,
 // Copies the data from a LiteRT buffer to a MP output tensor.
 absl::Status CopyLiteRtBufferToMpTensor(
     const litert::TensorBuffer& litert_buffer, Tensor& mp_tensor);
+
+// Creates a host memory TfString input buffer holding the contents of a kChar
+// MP tensor as a single string, like the legacy TFLite runners do (see
+// CopyTensorToTfLiteTensor<char>). An empty MP tensor (shape [0]) becomes one
+// empty string.
+absl::StatusOr<litert::TensorBuffer> CreateStringInputTensorBuffer(
+    const litert::Environment& environment,
+    const litert::RankedTensorType& model_tensor_type, const Tensor& mp_tensor);
 
 // Creates a LiteRT environment that uses the LiteRT handles provided by the
 // system, e.g. those acquired through the Google Play Services API.

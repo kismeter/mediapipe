@@ -11,15 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
+#include <memory>
 #include <vector>
 
-#include "Eigen/Dense"
-#include "absl/memory/memory.h"
+#include "Eigen/Core"            // from @eigen
+#include "absl/status/status.h"  // from @com_google_absl
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/formats/rect.pb.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status.h"
 #include "mediapipe/modules/objectron/calculators/annotation_data.pb.h"
 #include "mediapipe/modules/objectron/calculators/frame_annotation_to_rect_calculator.pb.h"
 

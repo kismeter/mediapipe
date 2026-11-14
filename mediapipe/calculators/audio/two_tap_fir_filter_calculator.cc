@@ -17,8 +17,9 @@
 #include <memory>
 #include <utility>
 
-#include "Eigen/Core"
-#include "absl/status/status.h"
+#include "Eigen/Core"                   // from @eigen
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
 #include "audio/linear_filters/two_tap_fir_filter.h"
 #include "mediapipe/calculators/audio/stabilized_log_calculator.pb.h"
 #include "mediapipe/calculators/audio/two_tap_fir_filter_calculator.pb.h"
@@ -26,7 +27,6 @@
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/formats/matrix.h"
 #include "mediapipe/framework/formats/time_series_header.pb.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/util/time_series_util.h"
 
 namespace mediapipe {

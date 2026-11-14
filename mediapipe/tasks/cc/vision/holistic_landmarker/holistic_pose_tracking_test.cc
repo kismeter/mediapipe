@@ -19,11 +19,13 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include "absl/flags/flag.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
-#include "absl/strings/substitute.h"
-#include "absl/types/span.h"
+#include "absl/flags/flag.h"            // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
+#include "absl/strings/string_view.h"   // from @com_google_absl
+#include "absl/strings/substitute.h"    // from @com_google_absl
+#include "absl/types/span.h"            // from @com_google_absl
 #include "file/base/helpers.h"
 #include "file/base/options.h"
 #include "mediapipe/calculators/util/landmarks_to_render_data_calculator.pb.h"
@@ -38,7 +40,6 @@ limitations under the License.
 #include "mediapipe/framework/port/gmock.h"
 #include "mediapipe/framework/port/gtest.h"
 #include "mediapipe/framework/port/parse_text_proto.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/framework/tool/test_util.h"
 #include "mediapipe/tasks/cc/core/mediapipe_builtin_op_resolver.h"
 #include "mediapipe/tasks/cc/core/proto/base_options.pb.h"

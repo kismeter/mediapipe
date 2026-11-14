@@ -17,11 +17,12 @@
 #include <utility>
 #include <vector>
 
-#include "absl/log/absl_log.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
-#include "absl/time/time.h"
+#include "absl/log/absl_log.h"          // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
+#include "absl/strings/string_view.h"   // from @com_google_absl
+#include "absl/time/time.h"             // from @com_google_absl
 #include "mediapipe/calculators/tensor/inference_calculator.h"
 #include "mediapipe/calculators/tensor/inference_io_mapper.h"
 #include "mediapipe/calculators/tensor/inference_on_disk_cache_helper.h"
@@ -32,7 +33,6 @@
 #include "mediapipe/framework/formats/tensor.h"
 #include "mediapipe/framework/mediapipe_profiling.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/gpu/gl_calculator_helper.h"
 #include "mediapipe/gpu/gl_context.h"
 #include "mediapipe/util/tflite/tflite_gpu_runner.h"
@@ -145,16 +145,22 @@ absl::StatusOr<std::vector<Tensor>>
 InferenceCalculatorGlAdvancedImpl::GpuInferenceRunner::Run(
     CalculatorContext* cc, const TensorSpan& input_tensors) {
   std::vector<Tensor> output_tensors;
+  std::vector<Tensor::OpenGlBufferView> read_views;
+  read_views.reserve(input_tensors.size());
   for (int i = 0; i < input_tensors.size(); ++i) {
-    ABSL_RETURN_IF_ERROR(tflite_gpu_runner_->BindSSBOToInputTensor(
-        input_tensors[i].GetOpenGlBufferReadView().name(), i));
+    read_views.push_back(input_tensors[i].GetOpenGlBufferReadView());
+    ABSL_RETURN_IF_ERROR(
+        tflite_gpu_runner_->BindSSBOToInputTensor(read_views.back().name(), i));
   }
   output_tensors.reserve(output_shapes_.size());
+  std::vector<Tensor::OpenGlBufferView> write_views;
+  write_views.reserve(output_shapes_.size());
   for (int i = 0; i < output_shapes_.size(); ++i) {
     output_tensors.emplace_back(Tensor::ElementType::kFloat32,
                                 output_shapes_[i]);
+    write_views.push_back(output_tensors.back().GetOpenGlBufferWriteView());
     ABSL_RETURN_IF_ERROR(tflite_gpu_runner_->BindSSBOToOutputTensor(
-        output_tensors.back().GetOpenGlBufferWriteView().name(), i));
+        write_views.back().name(), i));
   }
   // Run inference.
   {

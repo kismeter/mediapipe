@@ -16,12 +16,13 @@
 
 #include <memory>
 
-#include "absl/memory/memory.h"
+#include "absl/memory/memory.h"         // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
 #include "mediapipe/examples/desktop/autoflip/quality/polynomial_regression_path_solver.h"
 #include "mediapipe/examples/desktop/autoflip/quality/utils.h"
 #include "mediapipe/framework/port/opencv_core_inc.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status.h"
 
 // TODO: Parameterize FOV based on camera specs.
 constexpr float kWidthFieldOfView = 60;

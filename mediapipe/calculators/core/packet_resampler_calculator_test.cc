@@ -19,7 +19,8 @@
 #include <string>
 #include <vector>
 
-#include "absl/strings/str_cat.h"
+#include "absl/status/status.h"    // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
 #include "mediapipe/calculators/core/packet_resampler_calculator.pb.h"
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/calculator_runner.h"
@@ -141,7 +142,7 @@ class ReproducibleJitterWithReflectionStrategyForTesting
   static std::vector<uint64_t> random_sequence;
 
  protected:
-  virtual uint64_t GetNextRandom(uint64_t n) {
+  uint64_t GetNextRandom(uint64_t n) override {
     EXPECT_LT(sequence_index_, random_sequence.size());
     return random_sequence[sequence_index_++] % n;
   }
@@ -167,7 +168,7 @@ class ReproducibleResamplerCalculatorForTesting
 
  protected:
   std::unique_ptr<class PacketResamplerStrategy> GetSamplingStrategy(
-      const mediapipe::PacketResamplerCalculatorOptions& Options) {
+      const mediapipe::PacketResamplerCalculatorOptions& Options) override {
     return std::make_unique<ReproducibleJitterWithReflectionStrategyForTesting>(
         this);
   }

@@ -69,18 +69,22 @@ public final class InteractiveSegmenter implements AutoCloseable {
   public static InteractiveSegmenter createFromOptions(
       Context context, InteractiveSegmenterOptions options) {
     AndroidAssetUtil.initializeNativeAssetManager(context);
+    // The graph defaults the LiteRT GPU backend to OpenGL unless the app sets OPENCL (see
+    // interactive_segmenter_graph_gpu.cc).
     BaseOptionsProto.BaseOptions baseOptionsProto =
         BaseOptionsUtils.convertBaseOptionsToProto(options.baseOptions(), /* useLiteRt= */ true);
     byte[] baseOptionsBytes = baseOptionsProto.toByteArray();
     String appVersion = BaseOptionsUtils.getAppVersion(context);
     String appId = BaseOptionsUtils.getAppId(context);
+    Object liteRtSystemRuntimeHandle = null;
     long nativeSegmenterHandle =
         nativeCreate(
             baseOptionsBytes,
             appId,
             appVersion,
             BaseOptionsUtils.HOST_ENVIRONMENT_ANDROID,
-            BaseOptionsUtils.HOST_SYSTEM_ANDROID);
+            BaseOptionsUtils.HOST_SYSTEM_ANDROID,
+            liteRtSystemRuntimeHandle);
     if (nativeSegmenterHandle == 0) {
       // TODO: b/509975940 - get rid of ordinal() use.
       @SuppressWarnings("EnumOrdinal")
@@ -90,7 +94,11 @@ public final class InteractiveSegmenter implements AutoCloseable {
     return new InteractiveSegmenter(nativeSegmenterHandle);
   }
 
-  /** Sets the image to be segmented. */
+  /**
+   * Sets the image to be segmented.
+   *
+   * @throws MediaPipeException if the graph cannot be created.
+   */
   public void setImage(MPImage image) {
     Objects.requireNonNull(image, "Image must not be null");
     Packet imagePacket = packetCreator.createImage(image);
@@ -171,7 +179,8 @@ public final class InteractiveSegmenter implements AutoCloseable {
       String appId,
       String appVersion,
       int hostEnvironment,
-      int hostSystem);
+      int hostSystem,
+      Object liteRtSystemRuntimeHandle);
 
   private native void nativeSetImage(long segmenterHandle, long imagePacketHandle);
 

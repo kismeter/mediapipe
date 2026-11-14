@@ -14,15 +14,20 @@
 
 #include "mediapipe/calculators/tensor/litert/litert_utils.h"
 
+#include <cstring>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "absl/status/status.h"
+#include "absl/status/status.h"                   // from @com_google_absl
+#include "absl/strings/string_view.h"             // from @com_google_absl
 #include "litert/c/litert_tensor_buffer_types.h"  // from @litert
 #include "litert/cc/litert_element_type.h"        // from @litert
+#include "litert/cc/litert_environment.h"         // from @litert
 #include "litert/cc/litert_layout.h"              // from @litert
 #include "litert/cc/litert_ranked_tensor_type.h"  // from @litert
+#include "litert/cc/litert_string_util.h"         // from @litert
+#include "litert/cc/litert_tensor_buffer.h"       // from @litert
 #include "mediapipe/calculators/tensor/litert/litert_service.h"
 #include "mediapipe/framework/formats/tensor.h"
 #include "mediapipe/framework/port/gmock.h"
@@ -66,7 +71,8 @@ TEST(LiteRtUtilsTest, ShouldSuccessfullyCompareTensorTypes) {
       if (are_equal) {
         MP_EXPECT_OK(status);
       } else {
-        EXPECT_THAT(status, mediapipe::StatusIs(absl::StatusCode::kInternal));
+        EXPECT_THAT(status,
+                    absl_testing::StatusIs(absl::StatusCode::kInternal));
       }
     }
   }
@@ -127,10 +133,10 @@ TEST(LiteRtUtilsTest, ShouldDetectDifferentTensorShapes) {
   Tensor mp_tensor(Tensor::ElementType::kFloat32, Tensor::Shape({1, 1}),
                    /*memory_manager=*/nullptr,
                    /*alignment=*/0);
-  EXPECT_THAT(
-      AreTensorSpecsEqual(litert_tensor_type, mp_tensor),
-      mediapipe::StatusIs(absl::StatusCode::kInternal,
-                          testing::HasSubstr("LiteRt [2] and MediaPipe [1]")));
+  EXPECT_THAT(AreTensorSpecsEqual(litert_tensor_type, mp_tensor),
+              absl_testing::StatusIs(
+                  absl::StatusCode::kInternal,
+                  testing::HasSubstr("LiteRt [2] and MediaPipe [1]")));
 }
 
 class CreateTensorFromLiteRtRankedTensorTypeTest
@@ -165,6 +171,104 @@ INSTANTIATE_TEST_SUITE_P(
 TEST(CreateLiteRtEnvironmentTest, MissingRuntimeHandleFails) {
   EXPECT_THAT(CreateLiteRtEnvironment(LiteRtSystemHandles{}),
               StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(LiteRtUtilsTest, CreateTensorFromLiteRtRankedTensorTypeKeepsQuantization) {
+  litert::RankedTensorType litert_tensor_type(
+      litert::ElementType::UInt8, litert::Layout(litert::Dimensions{1, 4}));
+  MP_ASSERT_OK_AND_ASSIGN(
+      Tensor tensor,
+      CreateTensorFromLiteRtRankedTensorType(
+          litert_tensor_type, /*memory_manager=*/nullptr, /*alignment=*/0,
+          Tensor::QuantizationParameters{0.5f, 3}));
+  EXPECT_EQ(tensor.element_type(), Tensor::ElementType::kUInt8);
+  EXPECT_FLOAT_EQ(tensor.quantization_parameters().scale, 0.5f);
+  EXPECT_EQ(tensor.quantization_parameters().zero_point, 3);
+}
+
+TEST(LiteRtUtilsTest,
+     CreateTensorFromLiteRtRankedTensorTypeDefaultQuantization) {
+  litert::RankedTensorType litert_tensor_type(
+      litert::ElementType::Float32, litert::Layout(litert::Dimensions{1, 4}));
+  MP_ASSERT_OK_AND_ASSIGN(
+      Tensor tensor,
+      CreateTensorFromLiteRtRankedTensorType(
+          litert_tensor_type, /*memory_manager=*/nullptr, /*alignment=*/0));
+  EXPECT_FLOAT_EQ(tensor.quantization_parameters().scale, 1.0f);
+  EXPECT_EQ(tensor.quantization_parameters().zero_point, 0);
+}
+
+Tensor MakeCharTensor(absl::string_view text) {
+  Tensor tensor(Tensor::ElementType::kChar,
+                Tensor::Shape({static_cast<int>(text.size())}));
+  if (!text.empty()) {
+    auto write_view = tensor.GetCpuWriteView();
+    std::memcpy(write_view.buffer<char>(), text.data(), text.size());
+  }
+  return tensor;
+}
+
+TEST(CreateStringInputTensorBufferTest, SerializesNonEmptyAndEmptyCharTensors) {
+  auto env = litert::Environment::Create({});
+  ASSERT_TRUE(env);
+  const litert::RankedTensorType model_type(
+      litert::ElementType::TfString, litert::Layout(litert::Dimensions{1}));
+
+  MP_ASSERT_OK_AND_ASSIGN(
+      litert::TensorBuffer buffer,
+      CreateStringInputTensorBuffer(*env, model_type, MakeCharTensor("hello")));
+  auto strings = litert::util::GetStringsFromTensorBuffer(buffer);
+  ASSERT_TRUE(strings);
+  EXPECT_THAT(*strings, testing::ElementsAre("hello"));
+
+  // Empty MP tensor (shape [0], 0 bytes) becomes one empty string.
+  MP_ASSERT_OK_AND_ASSIGN(
+      litert::TensorBuffer empty_buffer,
+      CreateStringInputTensorBuffer(*env, model_type, MakeCharTensor("")));
+  auto empty_strings = litert::util::GetStringsFromTensorBuffer(empty_buffer);
+  ASSERT_TRUE(empty_strings);
+  EXPECT_THAT(*empty_strings, testing::ElementsAre(""));
+}
+
+TEST(CreateStringInputTensorBufferTest, ResolvesDynamicModelDimensionToOne) {
+  auto env = litert::Environment::Create({});
+  ASSERT_TRUE(env);
+  const litert::RankedTensorType dynamic_model_type(
+      litert::ElementType::TfString, litert::Layout(litert::Dimensions{-1}));
+
+  MP_ASSERT_OK_AND_ASSIGN(litert::TensorBuffer buffer,
+                          CreateStringInputTensorBuffer(
+                              *env, dynamic_model_type, MakeCharTensor("abc")));
+  auto tensor_type = buffer.TensorType();
+  ASSERT_TRUE(tensor_type);
+  EXPECT_THAT(tensor_type->Layout().Dimensions(), testing::ElementsAre(1));
+  auto strings = litert::util::GetStringsFromTensorBuffer(buffer);
+  ASSERT_TRUE(strings);
+  EXPECT_THAT(*strings, testing::ElementsAre("abc"));
+}
+
+TEST(CreateStringInputTensorBufferTest, FailsWithNonStringModelTensor) {
+  auto env = litert::Environment::Create({});
+  ASSERT_TRUE(env);
+  const litert::RankedTensorType float_model_type(
+      litert::ElementType::Float32, litert::Layout(litert::Dimensions{1}));
+
+  EXPECT_THAT(CreateStringInputTensorBuffer(*env, float_model_type,
+                                            MakeCharTensor("abc")),
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                                     testing::HasSubstr("not TfString")));
+}
+
+TEST(CreateStringInputTensorBufferTest, FailsWithNonCharTensor) {
+  auto env = litert::Environment::Create({});
+  ASSERT_TRUE(env);
+  const litert::RankedTensorType model_type(
+      litert::ElementType::TfString, litert::Layout(litert::Dimensions{1}));
+  Tensor float_tensor(Tensor::ElementType::kFloat32, Tensor::Shape({1}));
+
+  EXPECT_THAT(CreateStringInputTensorBuffer(*env, model_type, float_tensor),
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                                     testing::HasSubstr("kChar")));
 }
 
 }  // namespace

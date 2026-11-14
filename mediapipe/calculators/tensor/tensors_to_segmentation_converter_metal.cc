@@ -19,13 +19,15 @@
 #import <CoreVideo/CoreVideo.h>
 #import <Metal/Metal.h>
 #import <MetalKit/MetalKit.h>
+#include <TargetConditionals.h>
 
 #include <memory>
 #include <tuple>
 #include <utility>
 #include <vector>
 
-#include "absl/status/status.h"
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
 #include "mediapipe/calculators/tensor/tensors_to_segmentation_calculator.pb.h"
 #include "mediapipe/calculators/tensor/tensors_to_segmentation_converter.h"
 #include "mediapipe/calculators/tensor/tensors_to_segmentation_utils.h"
@@ -35,7 +37,6 @@
 #include "mediapipe/framework/formats/tensor.h"
 #include "mediapipe/framework/formats/tensor_mtl_buffer_view.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status_macros.h"
 #import "mediapipe/gpu/MPPMetalHelper.h"
 #include "mediapipe/gpu/MPPMetalUtil.h"
 #include "mediapipe/gpu/gl_calculator_helper.h"
@@ -278,6 +279,12 @@ TensorsToSegmentationMetalConverter::Convert(const Tensor& input_tensor,
                       threadsPerThreadgroup:threads_per_group];
       [command_encoder endEncoding];
       [command_buffer commit];
+#if TARGET_OS_SIMULATOR
+      // On Simulator, OpenGL ES cannot bind IOSurface-backed CVPixelBuffers
+      // directly and instead reads from the CPU-mapped base address in
+      // CreateSourceTexture, so wait for Metal to finish writing first.
+      [command_buffer waitUntilCompleted];
+#endif
 
       small_mask_texture = gpu_helper_.CreateSourceTexture(small_mask_buffer);
     }

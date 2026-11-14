@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "absl/strings/string_view.h"
+#include <cmath>
+#include <cstdlib>
+#include <memory>
+#include <vector>
+
+#include "absl/strings/string_view.h"  // from @com_google_absl
 #include "mediapipe/examples/desktop/autoflip/autoflip_messages.pb.h"
 #include "mediapipe/examples/desktop/autoflip/calculators/border_detection_calculator.pb.h"
 #include "mediapipe/framework/calculator_framework.h"
@@ -24,8 +29,6 @@
 #include "mediapipe/framework/port/gtest.h"
 #include "mediapipe/framework/port/opencv_core_inc.h"
 #include "mediapipe/framework/port/parse_text_proto.h"
-#include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status.h"
 #include "mediapipe/framework/port/status_matchers.h"
 
 using mediapipe::CalculatorGraphConfig;

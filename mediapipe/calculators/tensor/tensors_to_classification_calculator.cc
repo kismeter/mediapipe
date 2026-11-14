@@ -20,9 +20,10 @@
 #include <utility>
 #include <vector>
 
-#include "absl/container/flat_hash_set.h"
-#include "absl/status/status.h"
-#include "absl/strings/string_view.h"
+#include "absl/container/flat_hash_set.h"  // from @com_google_absl
+#include "absl/status/status.h"            // from @com_google_absl
+#include "absl/status/status_macros.h"     // from @com_google_absl
+#include "absl/strings/string_view.h"      // from @com_google_absl
 #include "mediapipe/calculators/tensor/tensors_to_classification_calculator.pb.h"
 #include "mediapipe/framework/api2/node.h"
 #include "mediapipe/framework/api2/port.h"
@@ -30,7 +31,6 @@
 #include "mediapipe/framework/formats/classification.pb.h"
 #include "mediapipe/framework/formats/tensor.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/framework/resources.h"
 #include "mediapipe/util/label_map.pb.h"
 #include "mediapipe/util/label_map_util.h"

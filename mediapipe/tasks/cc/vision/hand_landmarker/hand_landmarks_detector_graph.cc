@@ -17,8 +17,9 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
 #include "mediapipe/calculators/core/split_vector_calculator.pb.h"
 #include "mediapipe/calculators/tensor/tensors_to_classification_calculator.pb.h"
 #include "mediapipe/calculators/tensor/tensors_to_landmarks_calculator.pb.h"
@@ -26,17 +27,18 @@ limitations under the License.
 #include "mediapipe/calculators/util/thresholding_calculator.pb.h"
 #include "mediapipe/framework/api2/builder.h"
 #include "mediapipe/framework/api2/port.h"
+#include "mediapipe/framework/calculator.pb.h"
+#include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/formats/classification.pb.h"
 #include "mediapipe/framework/formats/image.h"
 #include "mediapipe/framework/formats/landmark.pb.h"
 #include "mediapipe/framework/formats/rect.pb.h"
-#include "mediapipe/framework/port/status_macros.h"
+#include "mediapipe/framework/subgraph.h"
 #include "mediapipe/tasks/cc/common.h"
 #include "mediapipe/tasks/cc/components/processors/image_preprocessing_graph.h"
 #include "mediapipe/tasks/cc/components/utils/gate.h"
 #include "mediapipe/tasks/cc/core/model_resources.h"
 #include "mediapipe/tasks/cc/core/model_task_graph.h"
-#include "mediapipe/tasks/cc/core/proto/inference_subgraph.pb.h"
 #include "mediapipe/tasks/cc/vision/hand_landmarker/proto/hand_landmarks_detector_graph_options.pb.h"
 #include "mediapipe/tasks/cc/vision/utils/image_tensor_specs.h"
 #include "mediapipe/util/label_map.pb.h"

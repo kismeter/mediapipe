@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "absl/memory/memory.h"
+#include "absl/memory/memory.h"  // from @com_google_absl
 #include "mediapipe/calculators/tensorflow/lapped_tensor_buffer_calculator.pb.h"
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/calculator_runner.h"
 #include "mediapipe/framework/port/gmock.h"
 #include "mediapipe/framework/port/gtest.h"
-#include "tensorflow/core/framework/tensor.h"
-#include "tensorflow/core/framework/tensor_shape.h"
-#include "tensorflow/core/framework/types.pb.h"
+#include "tensorflow/core/framework/tensor.h"        // from @org_tensorflow
+#include "tensorflow/core/framework/tensor_shape.h"  // from @org_tensorflow
+#include "tensorflow/core/framework/types.pb.h"      // from @org_tensorflow
 
 namespace mediapipe {
 

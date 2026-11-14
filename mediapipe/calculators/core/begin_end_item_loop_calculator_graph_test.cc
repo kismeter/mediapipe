@@ -16,10 +16,11 @@
 #include <string>
 #include <vector>
 
-#include "absl/container/flat_hash_map.h"
-#include "absl/log/absl_check.h"
-#include "absl/status/status.h"
-#include "absl/strings/str_cat.h"
+#include "absl/container/flat_hash_map.h"  // from @com_google_absl
+#include "absl/log/absl_check.h"           // from @com_google_absl
+#include "absl/status/status.h"            // from @com_google_absl
+#include "absl/status/status_macros.h"     // from @com_google_absl
+#include "absl/strings/str_cat.h"          // from @com_google_absl
 #include "mediapipe/framework/api2/builder.h"
 #include "mediapipe/framework/api2/node.h"
 #include "mediapipe/framework/calculator_contract.h"
@@ -28,7 +29,6 @@
 #include "mediapipe/framework/port/gmock.h"
 #include "mediapipe/framework/port/gtest.h"
 #include "mediapipe/framework/port/parse_text_proto.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/framework/port/status_matchers.h"
 
 namespace mediapipe {

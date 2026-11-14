@@ -15,17 +15,17 @@
 #include <memory>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
-#include "absl/strings/substitute.h"
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
+#include "absl/strings/string_view.h"   // from @com_google_absl
+#include "absl/strings/substitute.h"    // from @com_google_absl
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/formats/tensor.h"
 #include "mediapipe/framework/packet.h"
 #include "mediapipe/framework/port/gmock.h"
 #include "mediapipe/framework/port/gtest.h"
 #include "mediapipe/framework/port/parse_text_proto.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/framework/port/status_matchers.h"
 #include "mediapipe/framework/tool/options_map.h"
 #include "mediapipe/tasks/cc/core/utils.h"
@@ -34,7 +34,7 @@
 namespace mediapipe {
 namespace {
 
-using ::mediapipe::IsOkAndHolds;
+using ::absl_testing::IsOkAndHolds;
 using ::mediapipe::tasks::metadata::ModelMetadataExtractor;
 using ::testing::ElementsAreArray;
 

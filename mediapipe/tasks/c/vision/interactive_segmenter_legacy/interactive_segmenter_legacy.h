@@ -19,8 +19,6 @@ limitations under the License.
 #include <stdbool.h>
 #include <stdint.h>
 
-#include <cstdint>
-
 #include "mediapipe/tasks/c/components/containers/keypoint.h"
 #include "mediapipe/tasks/c/core/base_options.h"
 #include "mediapipe/tasks/c/core/common.h"
@@ -49,11 +47,27 @@ struct MpInteractiveSegmenterLegacyOptions {
   // file with metadata, accelerator options, op resolver, etc.
   struct MpBaseOptions base_options;
 
+  // The locale to use for display names specified through the TFLite Model
+  // Metadata, if any. Defaults to English.
+#ifdef __cplusplus
+  const char* display_names_locale = nullptr;
+#else
+  const char* display_names_locale;
+#endif
+
   // Whether to output confidence masks.
+#ifdef __cplusplus
   bool output_confidence_masks = true;
+#else
+  bool output_confidence_masks;
+#endif
 
   // Whether to output category mask.
+#ifdef __cplusplus
   bool output_category_mask = false;
+#else
+  bool output_category_mask;
+#endif
 };
 
 // The format used to specify the region-of-interest.
@@ -71,13 +85,13 @@ struct MpRegionOfInterest {
 
   // Represents the ROI in keypoint format, this should have a valid keypoint
   // with coordinates `x` and `y` if `format` is
-  // `MP_REGION_OF_INTEREST_FORMAT_KEYPOINT`; `nullptr` if not present
-  MpNormalizedKeypoint* keypoint;
+  // `MP_REGION_OF_INTEREST_FORMAT_KEYPOINT`.
+  struct MpNormalizedKeypoint keypoint;
 
   // Represents the ROI in scribble format, this should be not a `nullptr` if
   // `format` is `MP_REGION_OF_INTEREST_FORMAT_SCRIBBLE`; `nullptr` if not
   // present
-  MpNormalizedKeypoint* scribble;
+  struct MpNormalizedKeypoint* scribble;
 
   // Number of keypoints in scribble; 0 if not present
   uint32_t scribble_count;
@@ -106,7 +120,7 @@ MP_EXPORT MpStatus MpInteractiveSegmenterLegacyCreate(
 // `MpErrorFree()`.
 MP_EXPORT MpStatus MpInteractiveSegmenterLegacySegmentImage(
     MpInteractiveSegmenterLegacyPtr segmenter, MpImagePtr image,
-    const MpRegionOfInterest* roi,
+    const struct MpRegionOfInterest* roi,
     const MpImageProcessingOptions* image_processing_options,
     MpImageSegmenterResult* result, char** error_msg);
 
@@ -124,6 +138,20 @@ MP_EXPORT void MpInteractiveSegmenterLegacyCloseResult(
 // `MpErrorFree()`.
 MP_EXPORT MpStatus MpInteractiveSegmenterLegacyClose(
     MpInteractiveSegmenterLegacyPtr segmenter, char** error_msg);
+
+// Gets the category label list that the InteractiveSegmenterLegacy can
+// recognize. If there is no label map provided in the model file, an empty
+// label list is returned.
+//
+// Returns kMpOk on success and sets `label_list` to the label list. The caller
+// is responsible for freeing the memory of the `label_list` by calling
+// `MpStringListFree()`. To obtain a detailed error, `error_msg` must be a
+// non-null pointer to a `char*`, which will be populated with a newly-allocated
+// error message upon failure. It's the caller's responsibility to free the
+// error message with `MpErrorFree()`.
+MP_EXPORT MpStatus MpInteractiveSegmenterLegacyGetLabels(
+    MpInteractiveSegmenterLegacyPtr segmenter, MpStringList* label_list,
+    char** error_msg);
 
 #ifdef __cplusplus
 }  // extern C

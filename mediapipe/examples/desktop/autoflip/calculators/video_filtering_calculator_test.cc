@@ -16,15 +16,15 @@
 #include <string>
 #include <vector>
 
-#include "absl/strings/string_view.h"
-#include "absl/strings/substitute.h"
+#include "absl/status/status.h"        // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
+#include "absl/strings/substitute.h"   // from @com_google_absl
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/calculator_runner.h"
 #include "mediapipe/framework/formats/image_frame.h"
 #include "mediapipe/framework/port/gmock.h"
 #include "mediapipe/framework/port/gtest.h"
 #include "mediapipe/framework/port/parse_text_proto.h"
-#include "mediapipe/framework/port/status_builder.h"
 #include "mediapipe/framework/port/status_matchers.h"
 
 namespace mediapipe {

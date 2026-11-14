@@ -19,11 +19,12 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/strings/numbers.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/str_split.h"
-#include "absl/strings/string_view.h"
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/strings/numbers.h"       // from @com_google_absl
+#include "absl/strings/str_cat.h"       // from @com_google_absl
+#include "absl/strings/str_split.h"     // from @com_google_absl
+#include "absl/strings/string_view.h"   // from @com_google_absl
 #include "mediapipe/calculators/tensor/image_to_tensor_calculator.pb.h"
 #include "mediapipe/calculators/tensor/inference_calculator.pb.h"
 #include "mediapipe/framework/api2/builder.h"
@@ -33,7 +34,6 @@ limitations under the License.
 #include "mediapipe/framework/deps/file_path.h"
 #include "mediapipe/framework/formats/image.h"
 #include "mediapipe/framework/formats/tensor.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/framework/tool/switch_container.pb.h"
 #include "mediapipe/tasks/cc/core/model_asset_bundle_resources.h"
 #include "mediapipe/tasks/cc/core/model_resources.h"

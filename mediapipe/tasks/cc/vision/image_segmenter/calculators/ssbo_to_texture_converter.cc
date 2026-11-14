@@ -1,7 +1,9 @@
 #include "mediapipe/tasks/cc/vision/image_segmenter/calculators/ssbo_to_texture_converter.h"
 
-#include "tflite/delegates/gpu/gl/converters/util.h"
-#include "tflite/delegates/gpu/gl/gl_shader.h"
+#include "absl/status/status.h"                       // from @com_google_absl
+#include "absl/status/status_macros.h"                // from @com_google_absl
+#include "tflite/delegates/gpu/gl/converters/util.h"  // from @litert
+#include "tflite/delegates/gpu/gl/gl_shader.h"        // from @litert
 
 // Quick compile-time warning to ensure usage on the proper platform.
 #if !(MEDIAPIPE_OPENGL_ES_VERSION >= MEDIAPIPE_OPENGL_ES_31)

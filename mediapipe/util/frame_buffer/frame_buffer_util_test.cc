@@ -18,17 +18,20 @@
 #include <memory>
 #include <vector>
 
-#include "absl/log/absl_check.h"
+#include "absl/log/absl_check.h"        // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
 #include "mediapipe/framework/formats/frame_buffer.h"
 #include "mediapipe/framework/formats/tensor.h"
 #include "mediapipe/framework/port/gmock.h"
 #include "mediapipe/framework/port/gtest.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/framework/port/status_matchers.h"
 
 namespace mediapipe {
 namespace frame_buffer {
 namespace {
+
+using ::absl_testing::StatusIs;
 
 // Grayscale unit tests.
 //------------------------------------------------------------------------------

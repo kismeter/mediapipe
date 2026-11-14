@@ -20,7 +20,9 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "absl/status/statusor.h"
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
 #include "mediapipe/framework/api2/builder.h"
 #include "mediapipe/framework/formats/matrix.h"
 #include "mediapipe/tasks/cc/audio/audio_classifier/proto/audio_classifier_graph_options.pb.h"
@@ -30,9 +32,10 @@ limitations under the License.
 #include "mediapipe/tasks/cc/components/containers/proto/classifications.pb.h"
 #include "mediapipe/tasks/cc/components/processors/classifier_options.h"
 #include "mediapipe/tasks/cc/components/processors/proto/classifier_options.pb.h"
+#include "mediapipe/tasks/cc/core/base_options.h"
 #include "mediapipe/tasks/cc/core/proto/inference_subgraph.pb.h"
 #include "mediapipe/tasks/cc/core/task_runner.h"
-#include "tflite/core/api/op_resolver.h"
+#include "tflite/core/api/op_resolver.h"  // from @litert
 
 namespace mediapipe {
 namespace tasks {
@@ -84,7 +87,8 @@ std::unique_ptr<proto::AudioClassifierGraphOptions>
 ConvertAudioClassifierOptionsToProto(AudioClassifierOptions* options) {
   auto options_proto = std::make_unique<proto::AudioClassifierGraphOptions>();
   auto base_options_proto = std::make_unique<tasks::core::proto::BaseOptions>(
-      tasks::core::ConvertBaseOptionsToProto(&(options->base_options)));
+      tasks::core::ConvertBaseOptionsToProto(&(options->base_options),
+                                             /*use_litert=*/true));
   options_proto->mutable_base_options()->Swap(base_options_proto.get());
   options_proto->mutable_base_options()->set_use_stream_mode(
       options->running_mode == core::RunningMode::AUDIO_STREAM);
@@ -146,6 +150,8 @@ absl::StatusOr<std::unique_ptr<AudioClassifier>> AudioClassifier::Create(
        .host_environment = options->base_options.host_environment,
        .host_system = options->base_options.host_system,
        .host_version = options->base_options.host_version,
+       .app_id = options->base_options.app_id,
+       .app_version = options->base_options.app_version,
        .ca_bundle_path = options->base_options.ca_bundle_path});
 }
 

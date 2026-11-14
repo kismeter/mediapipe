@@ -17,8 +17,9 @@
 #include <string>
 #include <vector>
 
-#include "absl/log/absl_check.h"
-#include "absl/log/absl_log.h"
+#include "absl/log/absl_check.h"  // from @com_google_absl
+#include "absl/log/absl_log.h"    // from @com_google_absl
+#include "absl/status/status.h"   // from @com_google_absl
 #include "mediapipe/calculators/tensorflow/tensorflow_inference_calculator.pb.h"
 #include "mediapipe/calculators/tensorflow/tensorflow_session_from_frozen_graph_generator.pb.h"
 #include "mediapipe/framework/calculator_framework.h"
@@ -28,10 +29,10 @@
 #include "mediapipe/framework/port/gtest.h"
 #include "mediapipe/framework/port/status_matchers.h"  // NOLINT
 #include "mediapipe/framework/tool/validate_type.h"
-#include "tensorflow/core/framework/tensor.h"
-#include "tensorflow/core/framework/tensor_shape.h"
-#include "tensorflow/core/framework/tensor_testutil.h"
-#include "tensorflow/core/framework/types.h"
+#include "tensorflow/core/framework/tensor.h"           // from @org_tensorflow
+#include "tensorflow/core/framework/tensor_shape.h"     // from @org_tensorflow
+#include "tensorflow/core/framework/tensor_testutil.h"  // from @org_tensorflow
+#include "tensorflow/core/framework/types.h"            // from @org_tensorflow
 #include "testing/base/public/gunit.h"
 
 #ifdef __APPLE__
@@ -93,7 +94,7 @@ class TensorflowInferenceCalculatorTest : public ::testing::Test {
 
     PacketSet input_side_packets({});
     PacketSet output_side_packets({"SESSION"});
-    MEDIAPIPE_CHECK_OK(tool::RunGenerateAndValidateTypes(
+    ABSL_CHECK_OK(tool::RunGenerateAndValidateTypes(
         "TensorFlowSessionFromFrozenGraphGenerator", extendable_options,
         input_side_packets, &output_side_packets));
     runner_->MutableSidePackets()->Tag(kSessionTag) =

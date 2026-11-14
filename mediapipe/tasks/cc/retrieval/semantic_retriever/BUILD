@@ -169,7 +169,6 @@ cc_library(
     srcs = ["audio_decoder.cc"],
     hdrs = ["audio_decoder.h"],
     deps = [
-        "//mediapipe/framework/port:status",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:status_macros",
         "@com_google_absl//absl/status:statusor",
@@ -205,6 +204,7 @@ cc_library(
         ":memory_store",
         ":text_chunker",
         "//mediapipe/framework:timestamp",
+        "//mediapipe/tasks/cc/core:base_options",
         "//mediapipe/tasks/cc/core:embedding_provider",
         "//mediapipe/tasks/cc/core:running_mode",
         "//mediapipe/tasks/cc/core:tasks_logging_factory",  # build_cleaner: keep

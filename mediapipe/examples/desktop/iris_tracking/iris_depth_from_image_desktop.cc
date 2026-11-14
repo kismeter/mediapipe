@@ -14,23 +14,29 @@
 //
 // A utility to extract iris depth from a single image of face using the graph
 // mediapipe/graphs/iris_tracking/iris_depth_cpu.pbtxt.
+#include <cmath>
+#include <cstddef>
 #include <cstdlib>
+#include <iostream>
 #include <memory>
+#include <string>
+#include <utility>
 
-#include "absl/flags/flag.h"
-#include "absl/flags/parse.h"
-#include "absl/log/absl_log.h"
+#include "absl/flags/flag.h"            // from @com_google_absl
+#include "absl/flags/parse.h"           // from @com_google_absl
+#include "absl/log/absl_log.h"          // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/formats/image_frame.h"
 #include "mediapipe/framework/formats/image_frame_opencv.h"
-#include "mediapipe/framework/port/canonical_errors.h"
+#include "mediapipe/framework/output_stream_poller.h"
 #include "mediapipe/framework/port/file_helpers.h"
+#include "mediapipe/framework/port/opencv_core_inc.h"
 #include "mediapipe/framework/port/opencv_highgui_inc.h"
 #include "mediapipe/framework/port/opencv_imgcodecs_inc.h"
 #include "mediapipe/framework/port/opencv_imgproc_inc.h"
-#include "mediapipe/framework/port/opencv_video_inc.h"
 #include "mediapipe/framework/port/parse_text_proto.h"
-#include "mediapipe/framework/port/status.h"
 
 constexpr char kInputStream[] = "input_image_bytes";
 constexpr char kOutputImageStream[] = "output_image";

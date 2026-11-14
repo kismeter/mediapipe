@@ -26,7 +26,6 @@ cc_library(
     deps = [
         "//mediapipe/framework:timestamp",
         "//mediapipe/framework/formats:image",
-        "//mediapipe/framework/port:status",
         "//mediapipe/tasks/cc/components/containers:embedding_result",
         "//mediapipe/tasks/cc/components/utils:cosine_similarity",
         "//mediapipe/tasks/cc/components/utils:tga_utils",
@@ -39,6 +38,7 @@ cc_library(
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_macros",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@litert_lm//runtime/core:embedding_engine_impl",

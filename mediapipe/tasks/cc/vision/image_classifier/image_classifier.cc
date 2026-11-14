@@ -15,24 +15,28 @@ limitations under the License.
 
 #include "mediapipe/tasks/cc/vision/image_classifier/image_classifier.h"
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <utility>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
 #include "mediapipe/framework/api2/builder.h"
+#include "mediapipe/framework/calculator.pb.h"
+#include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/formats/image.h"
 #include "mediapipe/framework/formats/rect.pb.h"
 #include "mediapipe/framework/packet.h"
 #include "mediapipe/framework/timestamp.h"
+#include "mediapipe/tasks/cc/common.h"
 #include "mediapipe/tasks/cc/components/containers/classification_result.h"
 #include "mediapipe/tasks/cc/components/containers/proto/classifications.pb.h"
 #include "mediapipe/tasks/cc/components/processors/classifier_options.h"
 #include "mediapipe/tasks/cc/components/processors/proto/classifier_options.pb.h"
 #include "mediapipe/tasks/cc/core/base_options.h"
 #include "mediapipe/tasks/cc/core/proto/base_options.pb.h"
-#include "mediapipe/tasks/cc/core/proto/inference_subgraph.pb.h"
 #include "mediapipe/tasks/cc/core/task_runner.h"
 #include "mediapipe/tasks/cc/core/utils.h"
 #include "mediapipe/tasks/cc/vision/core/image_processing_options.h"
@@ -151,6 +155,8 @@ absl::StatusOr<std::unique_ptr<ImageClassifier>> ImageClassifier::Create(
        .host_environment = options->base_options.host_environment,
        .host_system = options->base_options.host_system,
        .host_version = options->base_options.host_version,
+       .app_id = options->base_options.app_id,
+       .app_version = options->base_options.app_version,
        .ca_bundle_path = options->base_options.ca_bundle_path});
 }
 

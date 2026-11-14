@@ -25,15 +25,15 @@
 #include <string>
 #include <utility>
 
-#include "absl/status/status.h"
-#include "absl/strings/substitute.h"
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/strings/substitute.h"    // from @com_google_absl
 #include "mediapipe/calculators/tensor/tensor_converter_gpu.h"
 #include "mediapipe/calculators/tensor/tensor_converter_metal.h"
 #include "mediapipe/framework/formats/tensor.h"
 #include "mediapipe/framework/formats/tensor_mtl_buffer_view.h"
 #include "mediapipe/framework/memory_manager.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status_macros.h"
 #import "mediapipe/gpu/MPPMetalHelper.h"
 #include "mediapipe/gpu/gpu_buffer.h"
 

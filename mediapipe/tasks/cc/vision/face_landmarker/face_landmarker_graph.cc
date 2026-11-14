@@ -18,8 +18,10 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "absl/log/absl_log.h"
-#include "absl/strings/str_format.h"
+#include "absl/log/absl_log.h"          // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/strings/str_format.h"    // from @com_google_absl
 #include "mediapipe/calculators/core/clip_vector_size_calculator.pb.h"
 #include "mediapipe/calculators/core/concatenate_vector_calculator.h"
 #include "mediapipe/calculators/core/gate_calculator.pb.h"
@@ -35,7 +37,6 @@ limitations under the License.
 #include "mediapipe/framework/formats/landmark.pb.h"
 #include "mediapipe/framework/formats/rect.pb.h"
 #include "mediapipe/framework/formats/tensor.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/tasks/cc/common.h"
 #include "mediapipe/tasks/cc/components/utils/gate.h"
 #include "mediapipe/tasks/cc/core/model_asset_bundle_resources.h"

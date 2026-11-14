@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include <memory>
+
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/formats/image.h"
 #include "mediapipe/framework/port.h"  // IWYU pragma: keep (MEDIAPIPE_GPU_BUFFER_USE_AHWB)
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/framework/tool/options_util.h"
 #include "mediapipe/gpu/gl_calculator_helper.h"
 #include "mediapipe/gpu/gl_quad_renderer.h"
@@ -28,7 +29,6 @@
 #include "mediapipe/gpu/gpu_buffer.h"
 #include "mediapipe/gpu/gpu_buffer_format.h"
 #include "mediapipe/gpu/gpu_buffer_storage_ahwb.h"  // IWYU pragma: keep (GpuBufferStorageAhwb)
-#include "mediapipe/gpu/shader_util.h"
 
 #ifdef __ANDROID__
 // The size of Java arrays is dynamic, which makes it difficult to
@@ -81,7 +81,7 @@ using Image = mediapipe::Image;
 class GlScalerCalculator : public CalculatorBase {
  public:
   GlScalerCalculator() {}
-  ~GlScalerCalculator();
+  ~GlScalerCalculator() override;
 
   static absl::Status GetContract(CalculatorContract* cc);
 

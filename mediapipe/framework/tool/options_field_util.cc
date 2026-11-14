@@ -1,23 +1,25 @@
 
 #include "mediapipe/framework/tool/options_field_util.h"
 
-#include <memory>
+#include <algorithm>
+#include <cstdint>
+#include <map>
 #include <string>
-#include <tuple>
+#include <utility>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/strings/match.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/string_view.h"
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
+#include "absl/strings/cord.h"          // from @com_google_absl
+#include "absl/strings/str_cat.h"       // from @com_google_absl
+#include "absl/strings/string_view.h"   // from @com_google_absl
 #include "mediapipe/framework/packet.h"
-#include "mediapipe/framework/packet_type.h"
 #include "mediapipe/framework/port/advanced_proto_inc.h"
 #include "mediapipe/framework/port/any_proto.h"
-#include "mediapipe/framework/port/canonical_errors.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status.h"
 #include "mediapipe/framework/tool/name_util.h"
+#include "mediapipe/framework/tool/options_registry.h"
 #include "mediapipe/framework/tool/proto_util_lite.h"
 #include "mediapipe/framework/tool/type_util.h"
 
@@ -168,8 +170,8 @@ FieldData SerializeProtobufAny(const FieldData& data) {
 }
 
 // Returns the field index of an extension type in a repeated field.
-StatusOr<int> FindExtensionIndex(const FieldData& message_data,
-                                 FieldPathEntry* entry) {
+absl::StatusOr<int> FindExtensionIndex(const FieldData& message_data,
+                                       FieldPathEntry* entry) {
   if (entry->field == nullptr || !IsProtobufAny(entry->field)) {
     return -1;
   }

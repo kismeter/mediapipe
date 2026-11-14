@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "absl/status/status.h"  // from @com_google_absl
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status.h"
-#include "mediapipe/framework/port/status_macros.h"
-#include "tensorflow/core/example/example.pb.h"
+#include "tensorflow/core/example/example.pb.h"  // from @org_tensorflow
 
 // A calculator to serialize/deserialize tensorflow::SequenceExample protos
 // to and from strings.

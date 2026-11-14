@@ -6,9 +6,10 @@
 #include <utility>
 #include <vector>
 
-#include "absl/log/absl_log.h"
-#include "absl/status/status.h"
-#include "absl/strings/str_cat.h"
+#include "absl/log/absl_log.h"          // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"       // from @com_google_absl
 #include "mediapipe/framework/api2/builder.h"
 #include "mediapipe/framework/api2/contract.h"
 #include "mediapipe/framework/api2/node_test.pb.h"
@@ -20,7 +21,6 @@
 #include "mediapipe/framework/port/gtest.h"
 #include "mediapipe/framework/port/parse_text_proto.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/framework/port/status_matchers.h"
 
 namespace mediapipe {

@@ -23,8 +23,8 @@ objc_library(
     srcs = ["sources/MPPBaseOptions+Helpers.mm"],
     hdrs = ["sources/MPPBaseOptions+Helpers.h"],
     deps = [
-        "//mediapipe/tasks/cc/core:base_options",
-        "//mediapipe/tasks/cc/core/proto:base_options_cc_proto",
+        "//mediapipe/tasks/c/core:base_options",
+        "//mediapipe/tasks/ios/common/utils:MPPCommonUtils",
         "//mediapipe/tasks/ios/core:MPPBaseOptions",
     ],
 )

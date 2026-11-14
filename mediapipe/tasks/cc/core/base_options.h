@@ -16,17 +16,18 @@ limitations under the License.
 #ifndef MEDIAPIPE_TASKS_CC_CORE_BASE_OPTIONS_H_
 #define MEDIAPIPE_TASKS_CC_CORE_BASE_OPTIONS_H_
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 #include <variant>
 #include <vector>
 
-#include "absl/memory/memory.h"
+#include "absl/memory/memory.h"  // from @com_google_absl
 #include "mediapipe/tasks/cc/core/host_environment.h"
 #include "mediapipe/tasks/cc/core/mediapipe_builtin_op_resolver.h"
 #include "mediapipe/tasks/cc/core/proto/base_options.pb.h"
-#include "tflite/core/api/op_resolver.h"
+#include "tflite/core/api/op_resolver.h"  // from @litert
 
 namespace mediapipe {
 namespace tasks {
@@ -66,6 +67,7 @@ struct BaseOptions {
       DEFAULT = 0,
       FP16 = 1,
       FP32 = 2,
+      FP16_WITH_FP32_ACCUM = 3,
     };
     Precision precision = DEFAULT;
 

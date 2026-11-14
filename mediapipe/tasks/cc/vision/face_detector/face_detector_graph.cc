@@ -16,8 +16,9 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
 #include "mediapipe/calculators/core/clip_vector_size_calculator.pb.h"
 #include "mediapipe/calculators/tensor/image_to_tensor_calculator.pb.h"
 #include "mediapipe/calculators/tensor/tensors_to_detections_calculator.pb.h"
@@ -33,11 +34,9 @@ limitations under the License.
 #include "mediapipe/framework/formats/rect.pb.h"
 #include "mediapipe/framework/formats/tensor.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/tasks/cc/components/processors/image_preprocessing_graph.h"
 #include "mediapipe/tasks/cc/core/model_resources.h"
 #include "mediapipe/tasks/cc/core/model_task_graph.h"
-#include "mediapipe/tasks/cc/core/proto/inference_subgraph.pb.h"
 #include "mediapipe/tasks/cc/metadata/metadata_extractor.h"
 #include "mediapipe/tasks/cc/vision/face_detector/proto/face_detector_graph_options.pb.h"
 #include "mediapipe/tasks/cc/vision/utils/image_tensor_specs.h"

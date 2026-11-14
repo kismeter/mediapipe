@@ -15,19 +15,21 @@
 #include <fstream>
 #include <iterator>
 
-#include "absl/log/absl_log.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/str_format.h"
+#include "absl/log/absl_log.h"          // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
+#include "absl/strings/str_format.h"    // from @com_google_absl
 #include "mediapipe/framework/port/file_helpers.h"
 #include "mediapipe/framework/port/ret_check.h"
 #include "mediapipe/util/resource_util.h"
 
 namespace mediapipe {
 
-absl::StatusOr<std::string> PathToResourceAsFile(const std::string& path,
+absl::StatusOr<std::string> PathToResourceAsFile(absl::string_view path,
                                                  bool /*shadow_copy*/) {
   if (absl::StartsWith(path, "/")) {
-    return path;
+    return std::string(path);
   }
 
   // Try the test environment.
@@ -39,7 +41,7 @@ absl::StatusOr<std::string> PathToResourceAsFile(const std::string& path,
     return test_path;
   }
 
-  return path;
+  return std::string(path);
 }
 
 namespace internal {

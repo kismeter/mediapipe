@@ -13,34 +13,37 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>  // IWYU pragma: keep
+#include <functional>
 #include <iterator>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "absl/algorithm/container.h"
-#include "absl/base/nullability.h"
-#include "absl/log/absl_log.h"
-#include "absl/log/log.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/str_format.h"  // IWYU pragma: keep
-#include "absl/strings/str_join.h"
-#include "absl/strings/string_view.h"
-#include "absl/types/span.h"
-#include "litert/cc/litert_buffer_ref.h"                     // from @litert
-#include "litert/cc/litert_common.h"                         // from @litert
-#include "litert/cc/litert_compiled_model.h"                 // from @litert
-#include "litert/cc/litert_environment.h"                    // from @litert
-#include "litert/cc/litert_environment_options.h"            // from @litert
-#include "litert/cc/litert_layout.h"                         // from @litert
-#include "litert/cc/litert_macros.h"                         // from @litert
-#include "litert/cc/litert_model_types.h"                    // from @litert
-#include "litert/cc/litert_options.h"                        // from @litert
-#include "litert/cc/litert_ranked_tensor_type.h"             // from @litert
-#include "litert/cc/litert_tensor_buffer.h"                  // from @litert
+#include "absl/algorithm/container.h"   // from @com_google_absl
+#include "absl/base/nullability.h"      // from @com_google_absl
+#include "absl/log/absl_log.h"          // from @com_google_absl
+#include "absl/log/log.h"               // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
+#include "absl/strings/str_cat.h"       // from @com_google_absl
+#include "absl/strings/str_format.h"  // from @com_google_absl  // IWYU pragma: keep
+#include "absl/strings/str_join.h"                 // from @com_google_absl
+#include "absl/strings/string_view.h"              // from @com_google_absl
+#include "absl/types/span.h"                       // from @com_google_absl
+#include "litert/cc/litert_buffer_ref.h"           // from @litert
+#include "litert/cc/litert_common.h"               // from @litert
+#include "litert/cc/litert_compiled_model.h"       // from @litert
+#include "litert/cc/litert_element_type.h"         // from @litert
+#include "litert/cc/litert_environment.h"          // from @litert
+#include "litert/cc/litert_environment_options.h"  // from @litert
+#include "litert/cc/litert_layout.h"               // from @litert
+#include "litert/cc/litert_macros.h"               // from @litert
+#include "litert/cc/litert_model_types.h"          // from @litert
+#include "litert/cc/litert_options.h"              // from @litert
+#include "litert/cc/litert_ranked_tensor_type.h"   // from @litert
+#include "litert/cc/litert_tensor_buffer.h"        // from @litert
 #include "litert/cc/litert_tensor_buffer_requirements.h"     // from @litert
 #include "litert/cc/litert_tensor_buffer_types.h"            // from @litert
 #include "litert/cc/options/litert_cpu_options.h"            // from @litert
@@ -61,14 +64,13 @@
 #include "mediapipe/framework/memory_manager.h"
 #include "mediapipe/framework/port.h"  // IWYU pragma: keep
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/util/tflite/tflite_model_loader.h"
 #include "mediapipe/util/tflite/tflite_signature_reader.h"
 
 #if MEDIAPIPE_METAL_ENABLED
 #include "mediapipe/framework/formats/tensor_mtl_buffer_view.h"
-#include "tflite/delegates/gpu/metal/metal_device.h"
-#endif  // MEDIAPIPE_METAL_ENABLED
+#include "tflite/delegates/gpu/metal/metal_device.h"  // from @litert
+#endif                                                // MEDIAPIPE_METAL_ENABLED
 #if MEDIAPIPE_OPENGL_ES_VERSION >= MEDIAPIPE_OPENGL_ES_31
 #include "mediapipe/gpu/gl_context.h"
 #endif
@@ -182,12 +184,55 @@ absl::StatusOr<litert::qualcomm::QualcommOptions::LogLevel> ToLiteRtLogLevel(
   }
 }
 
+absl::StatusOr<litert::qualcomm::QualcommOptions::HtpPdSession>
+ToLiteRtHtpPdSession(
+    InferenceCalculatorOptions::Delegate::LiteRt::Npu::Qualcomm::HtpPdSession
+        mp_pd_session) {
+  using HtpPdSession = litert::qualcomm::QualcommOptions::HtpPdSession;
+  using QualcommDelegateOptions =
+      InferenceCalculatorOptions::Delegate::LiteRt::Npu::Qualcomm;
+  switch (mp_pd_session) {
+    case QualcommDelegateOptions::HTP_PD_SESSION_UNSPECIFIED:
+    case QualcommDelegateOptions::HTP_PD_SESSION_UNSIGNED:
+      return HtpPdSession::kUnsigned;
+    case QualcommDelegateOptions::HTP_PD_SESSION_SIGNED:
+      return HtpPdSession::kSigned;
+    default:
+      return absl::InvalidArgumentError(
+          absl::StrCat("Unsupported Qualcomm HTP PD session ",
+                       static_cast<int>(mp_pd_session)));
+  }
+}
+
+bool CanUseAhwbForInput(
+    const Tensor& input_tensor,
+    absl::Span<const litert::TensorBufferType> supported_types) {
+  // Tensor::GetAHardwareBufferReadView() does not support converting from
+  // OpenGL 2D textures.
+  if (input_tensor.ready_as_opengl_texture_2d()) {
+    return false;
+  }
+  // Prefer direct GL-CL buffer sharing (`kGlBuffer`) when available if the
+  // input tensor is an OpenGL buffer not already backed by AHWB.
+  if (!input_tensor.ready_as_ahwb() && input_tensor.ready_as_opengl_buffer() &&
+      absl::c_contains(supported_types, litert::TensorBufferType::kGlBuffer)) {
+    return false;
+  }
+  return true;
+}
+
 // Returns the best supported LiteRT tensor buffer type.
 absl::StatusOr<litert::TensorBufferType> ChooseBestBufferType(
-    const litert::TensorBufferRequirements& buffer_requirements) {
+    const litert::TensorBufferRequirements& buffer_requirements,
+    const Tensor* input_tensor = nullptr) {
   LITERT_ASSIGN_OR_RETURN(const auto supported_types,
                           buffer_requirements.SupportedTypes());
   for (const auto& buffer_type : kPreferredBufferTypes) {
+    if (buffer_type == litert::TensorBufferType::kAhwb &&
+        input_tensor != nullptr &&
+        !CanUseAhwbForInput(*input_tensor, supported_types)) {
+      continue;
+    }
     if (absl::c_contains(supported_types, buffer_type)) {
       return buffer_type;
     }
@@ -272,6 +317,20 @@ absl::StatusOr<litert::Environment> InitializeLiteRtEnvironment(
     }
   }
 
+  // By default, creating a LiteRT environment registers every accelerator it
+  // can find. When only the CPU accelerator requested, register just the CPU
+  // accelerator.
+  bool cpu_only = options.has_cpu() && !options.has_gpu() && !options.has_npu();
+#if defined(__EMSCRIPTEN__)
+  cpu_only = cpu_only && !options.has_webnn();
+#endif  // __EMSCRIPTEN__
+  if (cpu_only) {
+    environment_options.push_back(litert::EnvironmentOptions::Option{
+        /*.tag=*/litert::EnvironmentOptions::Tag::kAutoRegisterAccelerators,
+        /*.value=*/static_cast<int64_t>(litert::HwAccelerators::kCpu),
+    });
+  }
+
 #if defined(__EMSCRIPTEN__)
   if (webgpu_service != nullptr) {
     const wgpu::Device& device = webgpu_service->device();
@@ -331,39 +390,6 @@ absl::Status CopyMpTensorToMpTensor(const Tensor& src_tensor,
   std::memcpy(dst_tensor_view.buffer<void>(), src_tensor_view.buffer<void>(),
               src_tensor.bytes());
   return absl::OkStatus();
-}
-
-// Returns true if any tensor of `signature` only gets its real shape at
-// runtime, in which case the runner must size its buffers from the runtime
-// layouts reported by the compiled model instead of the declared tensor types.
-// This is the case for:
-//  - inputs with a dynamic (-1) dimension, when dynamic resizing is enabled,
-//    since the input tensor is resized to the MP input shape on every run;
-//  - outputs declared without a shape (rank 0). Some models end in ops that
-//    compute their output shape at runtime and are serialized with
-//    `shape=[]`; using the declared rank-0 type would collapse such outputs
-//    to a single element.
-absl::StatusOr<bool> HasDynamicDimension(
-    const litert::SimpleSignature& signature, bool enable_dynamic_resize) {
-  if (enable_dynamic_resize) {
-    const size_t num_inputs = signature.InputNames().size();
-    for (size_t i = 0; i < num_inputs; ++i) {
-      LITERT_ASSIGN_OR_RETURN(const litert::RankedTensorType input_type,
-                              signature.InputTensorType(i));
-      if (absl::c_linear_search(input_type.Layout().Dimensions(), -1)) {
-        return true;
-      }
-    }
-  }
-  const size_t num_outputs = signature.OutputNames().size();
-  for (size_t i = 0; i < num_outputs; ++i) {
-    LITERT_ASSIGN_OR_RETURN(const litert::RankedTensorType output_type,
-                            signature.OutputTensorType(i));
-    if (output_type.Layout().Rank() == 0) {
-      return true;
-    }
-  }
-  return false;
 }
 
 }  // namespace
@@ -451,6 +477,11 @@ InferenceRunnerLiteRt::Create(
         case InferenceCalculatorOptions::Delegate::LiteRt::Gpu::FP32:
           gpu_options.SetPrecision(litert::GpuOptions::Precision::kFp32);
           break;
+        case InferenceCalculatorOptions::Delegate::LiteRt::Gpu::
+            FP16_WITH_FP32_ACCUM:
+          gpu_options.SetPrecision(
+              litert::GpuOptions::Precision::kFp16WithFp32Accum);
+          break;
         case InferenceCalculatorOptions::Delegate::LiteRt::Gpu::DEFAULT:
           gpu_options.SetPrecision(litert::GpuOptions::Precision::kDefault);
           break;
@@ -536,6 +567,151 @@ InferenceRunnerLiteRt::Create(
         LITERT_RETURN_IF_ERROR(gpu_options.CacheCompiledProgramsOnly(
             cache.cache_only_compiled_programs()));
       }
+      if (cache.has_program_cache_fd()) {
+        LITERT_RETURN_IF_ERROR(
+            gpu_options.SetProgramCacheFd(cache.program_cache_fd()));
+      }
+      if (cache.has_weight_cache_fd()) {
+        LITERT_RETURN_IF_ERROR(
+            gpu_options.SetWeightCacheFd(cache.weight_cache_fd()));
+      }
+      if (cache.has_serialize_external_tensors()) {
+        LITERT_RETURN_IF_ERROR(gpu_options.SetSerializeExternalTensors(
+            cache.serialize_external_tensors()));
+      }
+    }
+    if (options.gpu().has_enable_infinite_float_capping()) {
+      LITERT_RETURN_IF_ERROR(gpu_options.EnableInfiniteFloatCapping(
+          options.gpu().enable_infinite_float_capping()));
+    }
+    if (options.gpu().has_benchmark_mode()) {
+      LITERT_RETURN_IF_ERROR(
+          gpu_options.EnableBenchmarkMode(options.gpu().benchmark_mode()));
+    }
+    if (options.gpu().has_allow_src_quantized_fc_conv_ops()) {
+      LITERT_RETURN_IF_ERROR(gpu_options.EnableAllowSrcQuantizedFcConvOps(
+          options.gpu().allow_src_quantized_fc_conv_ops()));
+    }
+    if (options.gpu().has_buffer_storage_type()) {
+      switch (options.gpu().buffer_storage_type()) {
+        case InferenceCalculatorOptions::Delegate::LiteRt::Gpu::
+            BUFFER_STORAGE_TYPE_UNSPECIFIED:
+          LITERT_RETURN_IF_ERROR(gpu_options.SetBufferStorageType(
+              litert::GpuOptions::BufferStorageType::kDefault));
+          break;
+        case InferenceCalculatorOptions::Delegate::LiteRt::Gpu::
+            BUFFER_STORAGE_TYPE_BUFFER:
+          LITERT_RETURN_IF_ERROR(gpu_options.SetBufferStorageType(
+              litert::GpuOptions::BufferStorageType::kBuffer));
+          break;
+        case InferenceCalculatorOptions::Delegate::LiteRt::Gpu::
+            BUFFER_STORAGE_TYPE_TEXTURE_2D:
+          LITERT_RETURN_IF_ERROR(gpu_options.SetBufferStorageType(
+              litert::GpuOptions::BufferStorageType::kTexture2D));
+          break;
+        default:
+          return absl::InvalidArgumentError(
+              "Unsupported GPU buffer storage type");
+      }
+    }
+    for (const std::string& pattern :
+         options.gpu().buffer_storage_tensor_patterns()) {
+      LITERT_RETURN_IF_ERROR(
+          gpu_options.AddBufferStorageTensorPattern(pattern.c_str()));
+    }
+    if (options.gpu().has_external_tensors_mode()) {
+      LITERT_RETURN_IF_ERROR(gpu_options.EnableExternalTensorsMode(
+          options.gpu().external_tensors_mode()));
+    }
+    for (const std::string& pattern :
+         options.gpu().external_tensor_patterns()) {
+      LITERT_RETURN_IF_ERROR(
+          gpu_options.AddExternalTensorPattern(pattern.c_str()));
+    }
+    if (options.gpu().has_madvise_original_shared_tensors()) {
+      LITERT_RETURN_IF_ERROR(gpu_options.SetMadviseOriginalSharedTensors(
+          options.gpu().madvise_original_shared_tensors()));
+    }
+    if (options.gpu().has_priority()) {
+      switch (options.gpu().priority()) {
+        case InferenceCalculatorOptions::Delegate::LiteRt::Gpu::PRIORITY_HIGH:
+          LITERT_RETURN_IF_ERROR(
+              gpu_options.SetPriority(litert::GpuOptions::Priority::kHigh));
+          break;
+        case InferenceCalculatorOptions::Delegate::LiteRt::Gpu::PRIORITY_NORMAL:
+          LITERT_RETURN_IF_ERROR(
+              gpu_options.SetPriority(litert::GpuOptions::Priority::kNormal));
+          break;
+        case InferenceCalculatorOptions::Delegate::LiteRt::Gpu::PRIORITY_LOW:
+          LITERT_RETURN_IF_ERROR(
+              gpu_options.SetPriority(litert::GpuOptions::Priority::kLow));
+          break;
+        default:
+          break;
+      }
+    }
+    if (options.gpu().has_convert_weights_on_gpu()) {
+      LITERT_RETURN_IF_ERROR(gpu_options.SetConvertWeightsOnGpu(
+          options.gpu().convert_weights_on_gpu()));
+    }
+    if (options.gpu().has_prefer_texture_weights()) {
+      LITERT_RETURN_IF_ERROR(gpu_options.SetPreferTextureWeights(
+          options.gpu().prefer_texture_weights()));
+    }
+    if (options.gpu().has_wait_for_weights_conversion_complete()) {
+      LITERT_RETURN_IF_ERROR(gpu_options.WaitForWeightsConversionComplete(
+          options.gpu().wait_for_weights_conversion_complete()));
+    }
+    if (options.gpu().has_num_steps_of_command_buffer_preparations()) {
+      LITERT_RETURN_IF_ERROR(gpu_options.SetNumStepsOfCommandBufferPreparations(
+          options.gpu().num_steps_of_command_buffer_preparations()));
+    }
+    if (options.gpu().has_opencl()) {
+      const auto& opencl = options.gpu().opencl();
+      if (opencl.has_hint_waiting_for_completion()) {
+        LITERT_RETURN_IF_ERROR(gpu_options.HintWaitingForCompletion(
+            opencl.hint_waiting_for_completion()));
+      }
+      if (opencl.has_kernel_batch_size()) {
+        LITERT_RETURN_IF_ERROR(
+            gpu_options.SetKernelBatchSize(opencl.kernel_batch_size()));
+      }
+    }
+    if (options.gpu().has_webgpu()) {
+      const auto& webgpu = options.gpu().webgpu();
+      if (webgpu.has_preferred_device_substr()) {
+        LITERT_RETURN_IF_ERROR(gpu_options.SetPreferredDeviceSubstr(
+            webgpu.preferred_device_substr().c_str()));
+      }
+      if (webgpu.has_num_threads_to_upload()) {
+        LITERT_RETURN_IF_ERROR(
+            gpu_options.SetNumThreadsToUpload(webgpu.num_threads_to_upload()));
+      }
+      if (webgpu.has_num_threads_to_compile()) {
+        LITERT_RETURN_IF_ERROR(gpu_options.SetNumThreadsToCompile(
+            webgpu.num_threads_to_compile()));
+      }
+    }
+    if (options.gpu().has_vulkan() &&
+        options.gpu().vulkan().has_disable_shader_optimization()) {
+      LITERT_RETURN_IF_ERROR(gpu_options.DisableShaderOptimization(
+          options.gpu().vulkan().disable_shader_optimization()));
+    }
+    if (options.gpu().has_metal()) {
+#ifdef __APPLE__
+      const auto& metal = options.gpu().metal();
+      if (metal.has_use_argument_buffers()) {
+        LITERT_RETURN_IF_ERROR(gpu_options.SetUseMetalArgumentBuffers(
+            metal.use_argument_buffers()));
+      }
+      if (metal.has_enable_residency_set()) {
+        LITERT_RETURN_IF_ERROR(
+            gpu_options.EnableMetalResidencySet(metal.enable_residency_set()));
+      }
+#else
+      return absl::InvalidArgumentError(
+          "LiteRt::Gpu::Metal options are only supported on Apple platforms.");
+#endif  // __APPLE__
     }
   }
   if (accelerator & litert::HwAccelerators::kNpu) {
@@ -544,16 +720,18 @@ InferenceRunnerLiteRt::Create(
       } else {
         LITERT_ASSIGN_OR_RETURN(
             auto& google_tensor_options,
-            jit_compilation_options.GetGoogleTensorOptions());
-        // Default performance mode is kBalanced; this can be updated if
-        // required.
+            jit_compilation_options
+                .GetOptions<litert::google_tensor::GoogleTensorOptions>());
+        // Preserve any caller-supplied PerformanceMode; GetPerformanceMode()
+        // defaults to kBalanced when unset.
         google_tensor_options.SetPerformanceMode(
-            litert::google_tensor::GoogleTensorOptions::PerformanceMode::
-                kBalanced);
+            google_tensor_options.GetPerformanceMode());
       }
     } else if (options.npu().has_qualcomm()) {
-      LITERT_ASSIGN_OR_RETURN(auto& qualcomm_options,
-                              jit_compilation_options.GetQualcommOptions());
+      LITERT_ASSIGN_OR_RETURN(
+          auto& qualcomm_options,
+          jit_compilation_options
+              .GetOptions<::litert::qualcomm::QualcommOptions>());
       const auto& qualcomm_proto = options.npu().qualcomm();
       if (qualcomm_proto.has_htp_performance_mode()) {
         LITERT_ASSIGN_OR_RETURN(
@@ -565,6 +743,12 @@ InferenceRunnerLiteRt::Create(
         LITERT_ASSIGN_OR_RETURN(auto log_level,
                                 ToLiteRtLogLevel(qualcomm_proto.log_level()));
         qualcomm_options.SetLogLevel(log_level);
+      }
+      if (qualcomm_proto.has_htp_pd_session()) {
+        LITERT_ASSIGN_OR_RETURN(
+            auto htp_pd_session,
+            ToLiteRtHtpPdSession(qualcomm_proto.htp_pd_session()));
+        qualcomm_options.SetHtpPdSession(htp_pd_session);
       }
     }
   }
@@ -726,6 +910,12 @@ InferenceRunnerLiteRt::~InferenceRunnerLiteRt() {
 #if MEDIAPIPE_OPENGL_ES_VERSION >= MEDIAPIPE_OPENGL_ES_30
   if (gl_context_) {
     gl_context_->Run([this]() {
+#if MEDIAPIPE_TENSOR_USE_AHWB
+      {
+        absl::MutexLock lock(&ahwb_buffer_cache_->mutex);
+        ahwb_buffer_cache_->entries.clear();
+      }
+#endif  // MEDIAPIPE_TENSOR_USE_AHWB
       managed_input_buffers_.clear();
       managed_output_buffers_.clear();
       feedback_manager_.reset();
@@ -734,6 +924,14 @@ InferenceRunnerLiteRt::~InferenceRunnerLiteRt() {
     });
   }
 #endif  // MEDIAPIPE_OPENGL_ES_VERSION >= MEDIAPIPE_OPENGL_ES_30
+#if MEDIAPIPE_TENSOR_USE_AHWB
+  // Fallback for runners without a GL context (or non-GL builds); a no-op if
+  // the cache was already cleared on the GL thread above.
+  {
+    absl::MutexLock lock(&ahwb_buffer_cache_->mutex);
+    ahwb_buffer_cache_->entries.clear();
+  }
+#endif  // MEDIAPIPE_TENSOR_USE_AHWB
   managed_input_buffers_.clear();
   managed_output_buffers_.clear();
   feedback_manager_.reset();
@@ -750,11 +948,28 @@ InferenceRunnerLiteRt::~InferenceRunnerLiteRt() {
 #endif  // MEDIAPIPE_METAL_ENABLED
 }
 
-absl::Status InferenceRunnerLiteRt::Close() {
+absl::Status InferenceRunnerLiteRt::Close() { return ReleaseAhwbBufferCache(); }
+
+absl::Status InferenceRunnerLiteRt::ReleaseAhwbBufferCache() {
 #if MEDIAPIPE_TENSOR_USE_AHWB
   ABSL_RETURN_IF_ERROR(CleanAsyncRunStates(/*wait_for_all=*/true));
-#endif  // MEDIAPIPE_TENSOR_USE_AHWB
+  auto release = [this]() -> absl::Status {
+    {
+      absl::MutexLock lock(&ahwb_buffer_cache_->mutex);
+      ahwb_buffer_cache_->entries.clear();
+    }
+    return absl::OkStatus();
+  };
+#if MEDIAPIPE_OPENGL_ES_VERSION >= MEDIAPIPE_OPENGL_ES_30
+  // TensorBuffers may hold GL/CL interop resources, see destructor.
+  if (gl_context_) {
+    return gl_context_->Run(release);
+  }
+#endif  // MEDIAPIPE_OPENGL_ES_VERSION >= MEDIAPIPE_OPENGL_ES_30
+  return release();
+#else
   return absl::OkStatus();
+#endif  // MEDIAPIPE_TENSOR_USE_AHWB
 }
 
 // Creates a ranked tensor type for the given input tensor.
@@ -1052,18 +1267,75 @@ absl::StatusOr<int> DupFd(int fd) {
   return dup_fd;
 }
 
+bool InferenceRunnerLiteRt::IsAhwbTensorBufferInUse(
+    LiteRtTensorBuffer handle, const InferenceRunContext& ctx) const {
+  auto contains_handle = [handle](const std::vector<litert::TensorBuffer>& v) {
+    return absl::c_any_of(
+        v, [handle](const auto& buf) { return buf.Get() == handle; });
+  };
+  if (contains_handle(ctx.litert_inputs) ||
+      contains_handle(ctx.litert_outputs)) {
+    return true;
+  }
+  if (run_async_) {
+    absl::MutexLock lock(&async_runs_mutex_);
+    for (const auto& state : active_async_runs_) {
+      if (contains_handle(state.context.litert_inputs) ||
+          contains_handle(state.context.litert_outputs)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+absl::StatusOr<litert::TensorBuffer>
+InferenceRunnerLiteRt::GetOrCreateAhwbTensorBuffer(
+    const Tensor::AHardwareBufferView& ahwb_view,
+    const litert::RankedTensorType& tensor_type,
+    const InferenceRunContext& ctx) {
+  AHardwareBuffer* ahwb = ahwb_view.handle();
+  absl::MutexLock lock(&ahwb_buffer_cache_->mutex);
+  auto [it, inserted] = ahwb_buffer_cache_->entries.try_emplace(ahwb);
+  if (inserted) {
+    ahwb_view.AddHardwareBufferReleaseCallback(
+        [weak_cache = std::weak_ptr<AhwbBufferCache>(ahwb_buffer_cache_),
+         ahwb]() {
+          if (auto cache = weak_cache.lock()) {
+            absl::MutexLock lock(&cache->mutex);
+            auto node = cache->entries.extract(ahwb);
+            (void)node;
+          }
+        });
+  }
+  std::vector<litert::TensorBuffer>& cached_buffers = it->second;
+  for (auto& candidate : cached_buffers) {
+    LITERT_ASSIGN_OR_RETURN(auto cached_type, candidate.TensorType());
+    // RankedTensorType::operator== compares element type and layout
+    // (dimensions and strides).
+    if (cached_type == tensor_type &&
+        !IsAhwbTensorBufferInUse(candidate.Get(), ctx)) {
+      LITERT_ASSIGN_OR_RETURN(auto duplicated_buffer, candidate.Duplicate());
+      return duplicated_buffer;
+    }
+  }
+  LITERT_ASSIGN_OR_RETURN(auto new_buffer, litert::TensorBuffer::CreateFromAhwb(
+                                               *environment_, tensor_type, ahwb,
+                                               /*ahwb_offset=*/0));
+  cached_buffers.push_back(std::move(new_buffer));
+  LITERT_ASSIGN_OR_RETURN(auto duplicated_buffer,
+                          cached_buffers.back().Duplicate());
+  return duplicated_buffer;
+}
+
 absl::StatusOr<litert::TensorBuffer>
 InferenceRunnerLiteRt::CreateAhwbInputTensorBufferFromMpTensor(
     const Tensor& mp_input_tensor, const litert::RankedTensorType& tensor_type,
-    std::vector<InferenceRunnerLiteRt::MpTensorReadView>&
-        mp_input_tensor_views) {
+    InferenceRunContext& ctx) {
   auto input_tensor_view = mp_input_tensor.GetAHardwareBufferReadView();
-
-  AHardwareBuffer* ahwb = input_tensor_view.handle();
-  LITERT_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       auto litert_buffer,
-      litert::TensorBuffer::CreateFromAhwb(*environment_, tensor_type, ahwb,
-                                           /*ahwb_offset=*/0));
+      GetOrCreateAhwbTensorBuffer(input_tensor_view, tensor_type, ctx));
 
   const int write_complete_fence_fd =
       input_tensor_view.GetWriteCompleteFenceFd();
@@ -1075,23 +1347,31 @@ InferenceRunnerLiteRt::CreateAhwbInputTensorBufferFromMpTensor(
         auto event, litert::Event::CreateFromSyncFenceFd(*environment_, dup_fd,
                                                          /*owns_fd=*/true));
     LITERT_RETURN_IF_ERROR(litert_buffer.SetEvent(std::move(event)));
+  } else if (litert_buffer.HasEvent()) {
+    // TensorBuffer::Duplicate() shares the underlying LiteRtTensorBufferT (and
+    // its event_ field) with the cached entry, so clear any stale sync event
+    // left over from a previous run when no input fence FD is present.
+    LITERT_RETURN_IF_ERROR(litert_buffer.ClearEvent());
   }
-  mp_input_tensor_views.push_back(std::move(input_tensor_view));
+  ctx.active_input_views.push_back(std::move(input_tensor_view));
   return litert_buffer;
 }
 
 absl::StatusOr<litert::TensorBuffer>
 InferenceRunnerLiteRt::CreateAhwbOutputTensorBufferFromMpTensor(
     const Tensor& mp_output_tensor, const litert::RankedTensorType& tensor_type,
-    std::vector<InferenceRunnerLiteRt::MpTensorWriteView>&
-        mp_output_tensor_views) {
+    InferenceRunContext& ctx) {
   auto output_tensor_view = mp_output_tensor.GetAHardwareBufferWriteView();
-  AHardwareBuffer* ahwb = output_tensor_view.handle();
-  LITERT_ASSIGN_OR_RETURN(
+  ABSL_ASSIGN_OR_RETURN(
       auto output_buffer,
-      litert::TensorBuffer::CreateFromAhwb(*environment_, tensor_type, ahwb,
-                                           /*ahwb_offset=*/0));
-  mp_output_tensor_views.push_back(std::move(output_tensor_view));
+      GetOrCreateAhwbTensorBuffer(output_tensor_view, tensor_type, ctx));
+  if (output_buffer.HasEvent()) {
+    // TensorBuffer::Duplicate() shares the underlying LiteRtTensorBufferT (and
+    // its event_ field) with the cached entry, so clear any stale event left on
+    // a pooled AHardwareBuffer from a prior async output or fenced input run.
+    LITERT_RETURN_IF_ERROR(output_buffer.ClearEvent());
+  }
+  ctx.active_output_views.push_back(std::move(output_tensor_view));
   return output_buffer;
 }
 
@@ -1100,9 +1380,10 @@ InferenceRunnerLiteRt::CreateAhwbOutputTensorBufferFromMpTensor(
 absl::StatusOr<litert::TensorBuffer>
 InferenceRunnerLiteRt::CreateCpuInputTensorBufferFromMpTensor(
     const Tensor& tensor, const litert::RankedTensorType& tensor_type,
+    size_t alignment,
     std::vector<InferenceRunnerLiteRt::MpTensorReadView>& mp_input_tensor_views,
     std::vector<std::unique_ptr<Tensor>>& mp_aligned_input_tensors) {
-  if (IsTensorAligned(tensor, LITERT_HOST_MEMORY_BUFFER_ALIGNMENT)) {
+  if (IsTensorAligned(tensor, alignment)) {
     // Alignment requirement met, create with zero-copy.
     auto input_tensor_view = tensor.GetCpuReadView();
     const void* input_tensor_data = input_tensor_view.buffer<void>();
@@ -1119,10 +1400,9 @@ InferenceRunnerLiteRt::CreateCpuInputTensorBufferFromMpTensor(
       << "Input tensor memory is not aligned according to LiteRt's "
          "memory "
          "alignment requirements. Reallocating memory and copying data.";
-  ABSL_ASSIGN_OR_RETURN(
-      Tensor aligned_mp_input_tensor,
-      CreateTensorFromLiteRtRankedTensorType(
-          tensor_type, memory_manager_, LITERT_HOST_MEMORY_BUFFER_ALIGNMENT));
+  ABSL_ASSIGN_OR_RETURN(Tensor aligned_mp_input_tensor,
+                        CreateTensorFromLiteRtRankedTensorType(
+                            tensor_type, memory_manager_, alignment));
   auto aligned_mp_input_tensor_ptr =
       std::make_unique<Tensor>(std::move(aligned_mp_input_tensor));
   ABSL_RETURN_IF_ERROR(
@@ -1151,22 +1431,32 @@ InferenceRunnerLiteRt::CreateCpuOutputTensorBufferFromMpTensor(
                           litert::TensorBuffer::CreateFromHostMemory(
                               *environment_, tensor_type, output_tensor_data,
                               output_tensor_size_bytes));
-  mp_output_tensor_views.push_back(std::move(output_tensor_view));
+  if (mp_output_tensor.ready_as_ahwb()) {
+    // An AHardwareBuffer is mapped to the CPU only while its view is alive, so
+    // keep the view until inference completes.
+    mp_output_tensor_views.push_back(std::move(output_tensor_view));
+  }
+  // Otherwise the tensor's CPU buffer stays valid without the view. Releasing
+  // the view here avoids holding the locks of all outputs at once, which
+  // records a lock order that downstream calculators may violate. AHWB-backed
+  // outputs (e.g. when a downstream calculator reads the tensor as a GPU
+  // buffer) still keep their views above and thus still record that order.
   return output_buffer;
 }
 
 absl::StatusOr<litert::TensorBuffer>
 InferenceRunnerLiteRt::CreateInputTensorBufferFromMpTensor(
     litert::TensorBufferType buffer_type, const Tensor& tensor,
-    const litert::RankedTensorType& tensor_type, InferenceRunContext& ctx) {
+    const litert::RankedTensorType& tensor_type, size_t alignment,
+    InferenceRunContext& ctx) {
   switch (buffer_type) {
     case litert::TensorBufferType::kHostMemory:
       return CreateCpuInputTensorBufferFromMpTensor(
-          tensor, tensor_type, ctx.active_input_views, ctx.temporary_tensors);
+          tensor, tensor_type, alignment, ctx.active_input_views,
+          ctx.temporary_tensors);
 #if MEDIAPIPE_TENSOR_USE_AHWB
     case litert::TensorBufferType::kAhwb:
-      return CreateAhwbInputTensorBufferFromMpTensor(tensor, tensor_type,
-                                                     ctx.active_input_views);
+      return CreateAhwbInputTensorBufferFromMpTensor(tensor, tensor_type, ctx);
 #endif  // MEDIAPIPE_TENSOR_USE_AHWB
 #if MEDIAPIPE_METAL_ENABLED
     case litert::TensorBufferType::kMetalBufferPacked:
@@ -1207,17 +1497,17 @@ absl::StatusOr<bool> InferenceRunnerLiteRt::NeedsReallocation(
                         tensor_type.Layout().Dimensions());
 }
 
-absl::StatusOr<bool> InferenceRunnerLiteRt::TryAppendFeedbackBuffer(
-    bool is_input, int tensor_index, absl::string_view tensor_name,
-    std::vector<litert::TensorBuffer>& litert_buffers) const {
+absl::StatusOr<std::optional<litert::TensorBuffer>>
+InferenceRunnerLiteRt::TryGetFeedbackBuffer(
+    bool is_input, int tensor_index, absl::string_view tensor_name) const {
   if (!feedback_manager_) {
-    return false;
+    return std::nullopt;
   }
   bool is_feedback_tensor =
       is_input ? feedback_manager_->IsFeedbackInputTensorAtIndex(tensor_index)
                : feedback_manager_->IsFeedbackOutputTensorAtIndex(tensor_index);
   if (!is_feedback_tensor) {
-    return false;
+    return std::nullopt;
   }
   if (!feedback_manager_->Contains(tensor_name)) {
     return absl::InternalError(absl::StrCat(
@@ -1229,35 +1519,79 @@ absl::StatusOr<bool> InferenceRunnerLiteRt::TryAppendFeedbackBuffer(
       feedback_manager_->GetFeedbackTensorBuffer(tensor_name));
   LITERT_ASSIGN_OR_RETURN(litert::TensorBuffer buffer_dup,
                           feedback_buffer.Duplicate());
-  litert_buffers.push_back(std::move(buffer_dup));
-  return true;
+  return std::move(buffer_dup);
 }
 
 absl::Status InferenceRunnerLiteRt::PrepareInputBuffers(
     const litert::SimpleSignature& signature, const TensorSpan& tensor_span,
     InferenceRunContext& ctx) {
   const std::vector<litert::StringView> input_names = signature.InputNames();
-  ctx.litert_inputs.reserve(input_names.size());
+  RET_CHECK_EQ(input_names.size(),
+               tensor_span.size() + GetNumberOfFeedbackTensors());
+  std::vector<std::optional<litert::TensorBuffer>> litert_inputs(
+      input_names.size());
 
   // When feedback tensors are present then the model has more inputs than MP
-  // has tensors, so we use a separate counter to track which MP tensor maps to
-  // which model input.
+  // has tensors, so we populate feedback buffers directly and map the remaining
+  // signature input indices to their corresponding MP Tensors.
   int mp_tensor_index = 0;
+  struct TensorIndexPair {
+    const Tensor* tensor;
+    int idx;
+  };
+  std::vector<TensorIndexPair> mp_input_tensors;
+  mp_input_tensors.reserve(input_names.size());
   for (int i = 0; i < input_names.size(); ++i) {
     ABSL_ASSIGN_OR_RETURN(
-        bool is_feedback_tensor,
-        TryAppendFeedbackBuffer(true, i, input_names[i], ctx.litert_inputs));
-    if (is_feedback_tensor) continue;
-    // We have a MP tensor for this model input tensor.
-    const Tensor& mp_input_tensor = tensor_span[mp_tensor_index++];
-    const Tensor* tensor_to_use = &mp_input_tensor;
+        std::optional<litert::TensorBuffer> feedback_buffer,
+        TryGetFeedbackBuffer(/*is_input=*/true, i, input_names[i]));
+    if (feedback_buffer) {
+      litert_inputs[i] = std::move(*feedback_buffer);
+    } else {
+      // We have a MP tensor for this model input tensor.
+      mp_input_tensors.push_back(
+          {.tensor = &tensor_span[mp_tensor_index++], .idx = i});
+    }
+  }
 
-    ABSL_ASSIGN_OR_RETURN(
-        litert::TensorBufferType buffer_type,
-        ChooseBestBufferType(cached_input_buffer_requirements_[i]));
+  // If two runners run in parallel and acquire input tensor ReadViews in
+  // different orders, they may deadlock. See b/575484155 for details. This is
+  // because Tensors don't actually acquire read locks, but always full locks.
+  // Thus, sort tensors by address to ensure consistent lock acquisition order.
+  absl::c_sort(mp_input_tensors,
+               [](const TensorIndexPair& a, const TensorIndexPair& b) {
+                 return std::less<const Tensor*>{}(a.tensor, b.tensor);
+               });
+
+  // Also check if the same tensor is passed multiple times. This would lock
+  // the same tensor in multiple places, leading to a deadlock.
+  auto adjacent_it = std::adjacent_find(
+      mp_input_tensors.begin(), mp_input_tensors.end(),
+      [](const TensorIndexPair& a, const TensorIndexPair& b) {
+        return a.tensor == b.tensor;
+      });
+  RET_CHECK(adjacent_it == mp_input_tensors.end())
+      << "Tensor '" << input_names[adjacent_it->idx]
+      << "' is passed multiple times. This is currently not supported.";
+
+  for (const TensorIndexPair& info : mp_input_tensors) {
+    int i = info.idx;
+    const Tensor* tensor_to_use = info.tensor;
 
     LITERT_ASSIGN_OR_RETURN(const litert::RankedTensorType model_tensor_type,
                             signature.InputTensorType(i));
+    if (model_tensor_type.ElementType() == litert::ElementType::TfString) {
+      ABSL_ASSIGN_OR_RETURN(
+          litert_inputs[i],
+          CreateStringInputTensorBuffer(*environment_, model_tensor_type,
+                                        *tensor_to_use));
+      continue;
+    }
+
+    ABSL_ASSIGN_OR_RETURN(
+        litert::TensorBufferType buffer_type,
+        ChooseBestBufferType(cached_input_buffer_requirements_[i],
+                             tensor_to_use));
 
 #if MEDIAPIPE_METAL_ENABLED
     if (buffer_type == litert::TensorBufferType::kMetalBufferPacked) {
@@ -1275,6 +1609,10 @@ absl::Status InferenceRunnerLiteRt::PrepareInputBuffers(
 
     LITERT_ASSIGN_OR_RETURN(size_t buffer_size,
                             cached_input_buffer_requirements_[i].BufferSize());
+    LITERT_ASSIGN_OR_RETURN(size_t req_alignment,
+                            cached_input_buffer_requirements_[i].Alignment());
+    const size_t alignment =
+        std::max<size_t>(LITERT_HOST_MEMORY_BUFFER_ALIGNMENT, req_alignment);
     const bool size_mismatch = (buffer_size != tensor_to_use->bytes());
     if (size_mismatch) {
       // Accelerators (e.g. NPU hardware alignment or GPU vec4/PHWC4 padding)
@@ -1309,19 +1647,22 @@ absl::Status InferenceRunnerLiteRt::PrepareInputBuffers(
       }
       ABSL_RETURN_IF_ERROR(CopyMpTensorToLiteRtBuffer(
           *tensor_to_use, *managed_input_buffers_[i]));
-      LITERT_ASSIGN_OR_RETURN(litert::TensorBuffer duplicated_buffer,
+      LITERT_ASSIGN_OR_RETURN(litert_inputs[i],
                               managed_input_buffers_[i]->Duplicate());
-      ctx.litert_inputs.push_back(std::move(duplicated_buffer));
     } else {
-      ABSL_ASSIGN_OR_RETURN(litert::TensorBuffer litert_input_tensor,
-                            CreateInputTensorBufferFromMpTensor(
-                                buffer_type, *tensor_to_use, tensor_type, ctx));
-      ctx.litert_inputs.push_back(std::move(litert_input_tensor));
+      ABSL_ASSIGN_OR_RETURN(
+          litert_inputs[i],
+          CreateInputTensorBufferFromMpTensor(buffer_type, *tensor_to_use,
+                                              tensor_type, alignment, ctx));
     }
   }
 
-  RET_CHECK_EQ(tensor_span.size() + GetNumberOfFeedbackTensors(),
-               ctx.litert_inputs.size());
+  ctx.litert_inputs.reserve(input_names.size());
+  for (std::optional<litert::TensorBuffer>& input : litert_inputs) {
+    RET_CHECK(input.has_value());
+    ctx.litert_inputs.push_back(*std::move(input));
+  }
+
   return absl::OkStatus();
 }
 
@@ -1346,10 +1687,23 @@ InferenceRunnerLiteRt::CreateMpOutputTensors(
                           CreateOutputRankedTensorType(
                               model_tensor_type, output_tensor_layouts[i]));
 
-    ABSL_ASSIGN_OR_RETURN(
-        Tensor mp_output_tensor,
-        CreateTensorFromLiteRtRankedTensorType(
-            tensor_type, memory_manager_, LITERT_HOST_MEMORY_BUFFER_ALIGNMENT));
+    // Attach the model's output quantization so that quantized outputs can be
+    // dequantized downstream, as with the legacy TFLite runners.
+    LITERT_ASSIGN_OR_RETURN(const litert::SimpleTensor& model_tensor,
+                            signature.OutputTensor(static_cast<size_t>(i)));
+    LITERT_ASSIGN_OR_RETURN(
+        const auto output_buffer_requirements,
+        compiled_model_->GetOutputBufferRequirements(signature_index_, i),
+        _ << "Failed to get output buffer requirements for output " << i);
+    LITERT_ASSIGN_OR_RETURN(size_t req_alignment,
+                            output_buffer_requirements.Alignment());
+    const size_t alignment =
+        std::max<size_t>(LITERT_HOST_MEMORY_BUFFER_ALIGNMENT, req_alignment);
+
+    ABSL_ASSIGN_OR_RETURN(Tensor mp_output_tensor,
+                          CreateTensorFromLiteRtRankedTensorType(
+                              tensor_type, memory_manager_, alignment,
+                              GetMpQuantizationParameters(model_tensor)));
     mp_output_tensors.push_back(std::move(mp_output_tensor));
   }
   return mp_output_tensors;
@@ -1370,8 +1724,7 @@ InferenceRunnerLiteRt::CreateOutputTensorBufferFromMpTensor(
 #endif  // MEDIAPIPE_METAL_ENABLED
 #if MEDIAPIPE_TENSOR_USE_AHWB
     case litert::TensorBufferType::kAhwb:
-      return CreateAhwbOutputTensorBufferFromMpTensor(tensor, tensor_type,
-                                                      ctx.active_output_views);
+      return CreateAhwbOutputTensorBufferFromMpTensor(tensor, tensor_type, ctx);
 #endif  // MEDIAPIPE_TENSOR_USE_AHWB
 #if MEDIAPIPE_OPENGL_ES_VERSION >= MEDIAPIPE_OPENGL_ES_31
     case litert::TensorBufferType::kGlBuffer:
@@ -1404,9 +1757,12 @@ absl::Status InferenceRunnerLiteRt::PrepareOutputBuffers(
   int mp_output_tensor_index = 0;
   for (int i = 0; i < output_names.size(); ++i) {
     ABSL_ASSIGN_OR_RETURN(
-        bool is_feedback_tensor,
-        TryAppendFeedbackBuffer(false, i, output_names[i], ctx.litert_outputs));
-    if (is_feedback_tensor) continue;
+        std::optional<litert::TensorBuffer> feedback_buffer,
+        TryGetFeedbackBuffer(/*is_input=*/false, i, output_names[i]));
+    if (feedback_buffer.has_value()) {
+      ctx.litert_outputs.push_back(*std::move(feedback_buffer));
+      continue;
+    }
     LITERT_ASSIGN_OR_RETURN(const litert::RankedTensorType model_tensor_type,
                             signature.OutputTensorType(i));
     ABSL_ASSIGN_OR_RETURN(const litert::RankedTensorType tensor_type,
@@ -1465,6 +1821,42 @@ absl::Status InferenceRunnerLiteRt::PrepareOutputBuffers(
               tensor_type, ctx));
       ctx.litert_outputs.push_back(std::move(output_tensor));
     }
+
+    LITERT_ASSIGN_OR_RETURN(const litert::SimpleTensor& output_model_tensor,
+                            signature.OutputTensor(static_cast<size_t>(i)));
+    for (size_t j = 0; j < ctx.litert_inputs.size(); ++j) {
+      LITERT_ASSIGN_OR_RETURN(const litert::SimpleTensor& input_model_tensor,
+                              signature.InputTensor(j));
+      if (input_model_tensor.TensorIndex() ==
+          output_model_tensor.TensorIndex()) {
+        // When a model output aliases a model input directly (passthrough
+        // tensor with no producing operator), registering the output custom
+        // allocation overwrites the input custom allocation on the shared
+        // subgraph tensor. Pre-populate the output buffer from the input
+        // buffer so both in-graph consumers and the returned output tensor see
+        // the input data.
+        LITERT_ASSIGN_OR_RETURN(size_t src_bytes,
+                                ctx.litert_inputs[j].PackedSize());
+        LITERT_ASSIGN_OR_RETURN(size_t dst_bytes,
+                                ctx.litert_outputs.back().PackedSize());
+        RET_CHECK_EQ(src_bytes, dst_bytes)
+            << "Packed size mismatch between aliased input " << j << " ("
+            << src_bytes << " bytes) and output " << i << " (" << dst_bytes
+            << " bytes).";
+        LITERT_ASSIGN_OR_RETURN(
+            auto src_lock,
+            litert::TensorBufferScopedLock::Create(
+                ctx.litert_inputs[j], litert::TensorBuffer::LockMode::kRead));
+        LITERT_ASSIGN_OR_RETURN(auto dst_lock,
+                                litert::TensorBufferScopedLock::Create(
+                                    ctx.litert_outputs.back(),
+                                    litert::TensorBuffer::LockMode::kWrite));
+        if (src_bytes > 0 && dst_lock.second != src_lock.second) {
+          std::memcpy(dst_lock.second, src_lock.second, src_bytes);
+        }
+        break;
+      }
+    }
   }
   return absl::OkStatus();
 }
@@ -1503,7 +1895,17 @@ absl::Status InferenceRunnerLiteRt::CleanAsyncRunStates(bool wait_for_all) {
 
 absl::StatusOr<std::vector<Tensor>> InferenceRunnerLiteRt::Run(
     CalculatorContext* cc, const TensorSpan& tensor_span) {
+  // Declare `mp_output_tensors` before `ctx` so `ctx.active_output_views`
+  // (which holds locks on `mp_output_tensors`'s `view_mutex_`) is destroyed
+  // first on any error return.
+  std::vector<Tensor> mp_output_tensors;
   InferenceRunContext ctx;
+
+#if MEDIAPIPE_TENSOR_USE_AHWB
+  if (run_async_) {
+    ABSL_RETURN_IF_ERROR(CleanAsyncRunStates(/*wait_for_all=*/false));
+  }
+#endif  // MEDIAPIPE_TENSOR_USE_AHWB
 
 #if MEDIAPIPE_METAL_ENABLED
   auto cleanup_command_buffer = absl::MakeCleanup([this]() {
@@ -1540,7 +1942,7 @@ absl::StatusOr<std::vector<Tensor>> InferenceRunnerLiteRt::Run(
           signature_index_, /*update_allocation=*/has_dynamic_dimension_));
 
   ABSL_ASSIGN_OR_RETURN(
-      std::vector<Tensor> mp_output_tensors,
+      mp_output_tensors,
       CreateMpOutputTensors(signature_, output_tensor_layouts));
 
   ABSL_RETURN_IF_ERROR(PrepareOutputBuffers(signature_, output_tensor_layouts,

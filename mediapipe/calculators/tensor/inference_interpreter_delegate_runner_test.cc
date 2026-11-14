@@ -6,8 +6,9 @@
 #include <utility>
 #include <vector>
 
-#include "absl/functional/any_invocable.h"
-#include "absl/status/status.h"
+#include "absl/functional/any_invocable.h"  // from @com_google_absl
+#include "absl/status/status.h"             // from @com_google_absl
+#include "absl/status/status_macros.h"      // from @com_google_absl
 #include "mediapipe/calculators/tensor/tensor_span.h"
 #include "mediapipe/calculators/tensor/tflite_delegate_ptr.h"
 #include "mediapipe/framework/api2/builder.h"
@@ -19,19 +20,19 @@
 #include "mediapipe/framework/formats/tensor.h"
 #include "mediapipe/framework/port/gmock.h"
 #include "mediapipe/framework/port/gtest.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/framework/port/status_matchers.h"
 #include "mediapipe/framework/resources.h"
 #include "mediapipe/util/tflite/tflite_model_loader.h"
-#include "tflite/core/api/op_resolver.h"
-#include "tflite/delegates/xnnpack/xnnpack_delegate.h"
-#include "tflite/kernels/register.h"
-#include "tflite/util.h"
+#include "tflite/core/api/op_resolver.h"                // from @litert
+#include "tflite/delegates/xnnpack/xnnpack_delegate.h"  // from @litert
+#include "tflite/kernels/register.h"                    // from @litert
+#include "tflite/util.h"                                // from @litert
 
 namespace mediapipe {
 namespace api2 {
 namespace {
 
+using ::absl_testing::StatusIs;
 using ::mediapipe::Tensor;
 using ::testing::HasSubstr;
 

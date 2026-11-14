@@ -22,6 +22,7 @@ licenses(["notice"])
 exports_files([
     "mediapipe_tasks_audio_version_script.lds",
     "mediapipe_tasks_c_version_script.lds",
+    "mediapipe_tasks_decision_version_script.lds",
     "mediapipe_tasks_retrieval_version_script.lds",
     "mediapipe_tasks_text_version_script.lds",
     "mediapipe_tasks_vision_version_script.lds",
@@ -30,6 +31,14 @@ exports_files([
 # C API libraries that are part of every domain library.
 MEDIAPIPE_TASKS_C_CORE_DEPS = [
     "//mediapipe/tasks/c/core:common",
+    "//mediapipe/tasks/c/core:mp_logging_c_lib",
+] + select({
+    "//conditions:default": [],
+})
+
+# Flatbuffer C API used by the Python metadata writers of Model Maker. Only part
+# of the monolithic library; the per-domain libraries don't need it.
+MEDIAPIPE_TASKS_C_MODEL_MAKER_DEPS = [
     "//mediapipe/tasks/c/metadata:flatbuffer_api_c_lib",
 ]
 
@@ -43,6 +52,7 @@ MEDIAPIPE_TASKS_C_VISION_DEPS = [
     "//mediapipe/tasks/c/vision/image_classifier:image_classifier_c_lib",
     "//mediapipe/tasks/c/vision/image_embedder:image_embedder_c_lib",
     "//mediapipe/tasks/c/vision/image_segmenter:image_segmenter_c_lib",
+    "//mediapipe/tasks/c/vision/interactive_segmenter:interactive_segmenter_hdr",
     "//mediapipe/tasks/c/vision/interactive_segmenter_legacy:interactive_segmenter_legacy_c_lib",
     "//mediapipe/tasks/c/vision/object_detector:object_detector_c_lib",
     "//mediapipe/tasks/c/vision/pose_landmarker:pose_landmarker_c_lib",
@@ -52,11 +62,19 @@ MEDIAPIPE_TASKS_C_TEXT_DEPS = [
     "//mediapipe/tasks/c/text/language_detector:language_detector_c_lib",
     "//mediapipe/tasks/c/text/text_classifier:text_classifier_c_lib",
     "//mediapipe/tasks/c/text/text_embedder:text_embedder_c_lib",
+    "//mediapipe/tasks/c/text/text_proofreader:text_proofreader_c_lib",
+    "//mediapipe/tasks/c/text/text_summarizer:text_summarizer_c_lib",
 ]
 
 MEDIAPIPE_TASKS_C_AUDIO_DEPS = [
     "//mediapipe/tasks/c/audio/audio_classifier:audio_classifier_c_lib",
     "//mediapipe/tasks/c/audio/audio_embedder:audio_embedder_c_lib",
+    "//mediapipe/tasks/c/audio/audio_transcriber:audio_transcriber_hdr",
+    "//mediapipe/tasks/c/audio/text_to_speech:text_to_speech_hdr",
+]
+
+MEDIAPIPE_TASKS_C_DECISION_DEPS = [
+    "//mediapipe/tasks/c/decision/decision_maker",
 ]
 
 MEDIAPIPE_TASKS_C_RETRIEVAL_DEPS = [
@@ -114,6 +132,15 @@ mediapipe_tasks_c_shared_library(
 )
 
 mediapipe_tasks_c_shared_library(
+    name = "mediapipe_tasks_decision",
+    framework_bundle_id = "com.google.mediapipe.tasks.c.decision",
+    framework_name = "MediaPipeTasksDecisionC",
+    version_script = ":mediapipe_tasks_decision_version_script.lds",
+    visibility = ["//visibility:public"],
+    deps = MEDIAPIPE_TASKS_C_CORE_DEPS + MEDIAPIPE_TASKS_C_DECISION_DEPS,
+)
+
+mediapipe_tasks_c_shared_library(
     name = "mediapipe_tasks_retrieval",
     framework_bundle_id = "com.google.mediapipe.tasks.c.retrieval",
     framework_name = "MediaPipeTasksRetrievalC",
@@ -147,6 +174,7 @@ cc_binary(
     ],
     deps = [":mediapipe_tasks_c_version_script.lds"] +
            MEDIAPIPE_TASKS_C_CORE_DEPS +
+           MEDIAPIPE_TASKS_C_MODEL_MAKER_DEPS +
            MEDIAPIPE_TASKS_C_AUDIO_DEPS +
            MEDIAPIPE_TASKS_C_RETRIEVAL_DEPS +
            MEDIAPIPE_TASKS_C_TEXT_DEPS +

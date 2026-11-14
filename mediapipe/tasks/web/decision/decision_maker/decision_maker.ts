@@ -31,7 +31,9 @@ import type {
   ClassifierQuestion,
   ClassifierQuestionType,
   ClassifierSchema,
+  DecisionContextInput,
   DecisionMakerOptions,
+  InputPrompt,
   ScoreQuestion,
 } from './decision_maker_options';
 import type {
@@ -57,7 +59,9 @@ export type {
   ClassifierQuestionType,
   ClassifierResult,
   ClassifierSchema,
+  DecisionContextInput,
   DecisionMakerOptions,
+  InputPrompt,
   ScoreQuestion,
   ScoreResult,
 };
@@ -74,6 +78,10 @@ const ENCODER_BACKEND_TYPE = 1;
  * in `decision_maker_api.cc` to select `MP_DELEGATE_CPU` (`backend_type < 0`).
  */
 const CPU_DELEGATE_BACKEND_TYPE = -1;
+
+type RawWasmChoiceResult = Omit<ChoiceResult, 'predictionSet'> & {
+  predictionSet?: string[];
+};
 
 /**
  * The Wasm module for Decision with custom C++ bindings.
@@ -102,6 +110,19 @@ declare interface DecisionMakerWasmModule {
     condition: string,
     threshold: number,
     temperature: number,
+    normalizePrior: boolean,
+    examples: WasmBooleanExamples,
+  ): Promise<BooleanResult>;
+
+  evaluateContextBoolean(
+    makerPtr: number,
+    text: string,
+    condition: string,
+    threshold: number,
+    temperature: number,
+    media: {imageBytes?: Uint8Array; audioSamples?: Float32Array},
+    normalizePrior: boolean,
+    examples: WasmBooleanExamples,
   ): Promise<BooleanResult>;
 
   evaluateChoice(
@@ -110,7 +131,21 @@ declare interface DecisionMakerWasmModule {
     criteria: Record<string, string>,
     temperature: number,
     instructions: string,
-  ): Promise<ChoiceResult>;
+    normalizePrior: boolean,
+    examples: WasmChoiceExamples,
+  ): Promise<RawWasmChoiceResult>;
+
+  evaluateContextChoice(
+    makerPtr: number,
+    text: string,
+    criteria: Record<string, string>,
+    options: ClassifierOption[],
+    temperature: number,
+    instructions: string,
+    media: {imageBytes?: Uint8Array; audioSamples?: Float32Array},
+    normalizePrior: boolean,
+    examples: WasmChoiceExamples,
+  ): Promise<RawWasmChoiceResult>;
 
   evaluateScore(
     makerPtr: number,
@@ -120,6 +155,15 @@ declare interface DecisionMakerWasmModule {
     instructions: string,
   ): Promise<ScoreResult>;
 
+  evaluateContextScore(
+    makerPtr: number,
+    text: string,
+    rubric: string[],
+    temperature: number,
+    instructions: string,
+    media: {imageBytes?: Uint8Array; audioSamples?: Float32Array},
+  ): Promise<ScoreResult>;
+
   evaluateBooleanBatch?(
     makerPtr: number,
     texts: string[],
@@ -127,6 +171,8 @@ declare interface DecisionMakerWasmModule {
     threshold: number,
     temperature: number,
     sharedPrefix: string,
+    normalizePrior: boolean,
+    examples: WasmBooleanExamples,
   ): Promise<BooleanResult[]>;
 
   evaluateChoiceBatch?(
@@ -136,7 +182,9 @@ declare interface DecisionMakerWasmModule {
     temperature: number,
     instructions: string,
     sharedPrefix: string,
-  ): Promise<ChoiceResult[]>;
+    normalizePrior: boolean,
+    examples: WasmChoiceExamples,
+  ): Promise<RawWasmChoiceResult[]>;
 
   evaluateScoreBatch?(
     makerPtr: number,
@@ -147,18 +195,199 @@ declare interface DecisionMakerWasmModule {
     sharedPrefix: string,
   ): Promise<ScoreResult[]>;
 
+  prewarmChoice?(
+    makerPtr: number,
+    criteria: Record<string, string>,
+    options: ClassifierOption[],
+    temperature: number,
+    instructions: string,
+    normalizePrior: boolean,
+    examples: WasmChoiceExamples,
+  ): Promise<boolean>;
+
   prewarmSchema?(
     makerPtr: number,
     schemaContext: string,
     questions: ClassifierQuestion[],
   ): Promise<boolean>;
 
-  evaluateSchema?(
+  evaluateSchema(
     makerPtr: number,
     text: string,
     schemaContext: string,
     questions: ClassifierQuestion[],
   ): Promise<ClassifierResult>;
+
+  evaluateContextSchema(
+    makerPtr: number,
+    text: string,
+    schemaContext: string,
+    questions: ClassifierQuestion[],
+    media: {imageBytes?: Uint8Array; audioSamples?: Float32Array},
+  ): Promise<ClassifierResult>;
+}
+
+/** Example fields passed to the Wasm Boolean functions. */
+declare interface WasmBooleanExamples {
+  positiveExamples: string[];
+  negativeExamples: string[];
+  inputPrompt: InputPrompt;
+}
+
+/** Example fields passed to the Wasm Choice functions. */
+declare interface WasmChoiceExamples {
+  /** Choice key to examples; empty when the question has no examples. */
+  examples: Record<string, string[]>;
+  inputPrompt: InputPrompt;
+  balanceClassWeights: boolean;
+}
+
+function hasBooleanExamples(question: {
+  positiveExamples?: string[];
+  negativeExamples?: string[];
+}): boolean {
+  return (
+    (question.positiveExamples?.length ?? 0) > 0 ||
+    (question.negativeExamples?.length ?? 0) > 0
+  );
+}
+
+/**
+ * Checks the example lists of a Boolean question (both or neither) and returns
+ * them for Wasm.
+ */
+function resolveBooleanExamples(question: {
+  positiveExamples?: string[];
+  negativeExamples?: string[];
+  inputPrompt?: InputPrompt;
+}): WasmBooleanExamples {
+  const positiveExamples = question.positiveExamples ?? [];
+  const negativeExamples = question.negativeExamples ?? [];
+  if (positiveExamples.length > 0 !== negativeExamples.length > 0) {
+    throw new Error(
+      'A BooleanQuestion with examples needs both positiveExamples and ' +
+        'negativeExamples.',
+    );
+  }
+  return {
+    positiveExamples,
+    negativeExamples,
+    inputPrompt: question.inputPrompt ?? 'CLASSIFICATION',
+  };
+}
+
+/** Whether `record` has `key` as an own (not inherited) property. */
+function hasOwn(record: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(record, key);
+}
+
+/** Returns `record[key]` if `record` has `key` as an own property. */
+function getOwn<T>(record: Record<string, T>, key: string): T | undefined {
+  return hasOwn(record, key) ? record[key] : undefined;
+}
+
+/**
+ * Checks the all-or-nothing rule for choice examples: either no choice has
+ * examples, or there are at least 2 choices and every one has at least one.
+ */
+function validateChoiceExamples(
+  keys: string[],
+  examples: Record<string, string[] | undefined>,
+): void {
+  const exampleKeys = Object.keys(examples);
+  if (!exampleKeys.some((k) => (examples[k]?.length ?? 0) > 0)) return;
+  if (keys.length < 2) {
+    throw new Error('A ChoiceQuestion with examples needs at least 2 choices.');
+  }
+  if (
+    exampleKeys.length !== keys.length ||
+    !keys.every((k) => hasOwn(examples, k))
+  ) {
+    throw new Error('examples and criteria must list the same choices.');
+  }
+  for (const k of keys) {
+    if ((getOwn(examples, k)?.length ?? 0) === 0) {
+      throw new Error(`Choice '${k}' needs at least one example.`);
+    }
+  }
+}
+
+/**
+ * Collects a choice question's examples (from `examples` and from
+ * `options[].examples`), checks them, and returns them for Wasm.
+ */
+function resolveChoiceExamples(
+  question: ChoiceQuestion,
+  criteria: Record<string, string>,
+): WasmChoiceExamples {
+  const keys = Object.keys(criteria);
+  if (keys.length === 0) {
+    throw new Error('ChoiceQuestion must contain at least 1 choice.');
+  }
+  const examples: Record<string, string[]> = {};
+  const options = question.options ?? [];
+  if (options.some((o) => (o.examples?.length ?? 0) > 0)) {
+    for (const opt of options) examples[opt.label] = opt.examples ?? [];
+  }
+  for (const [k, v] of Object.entries(question.examples ?? {})) {
+    examples[k] = v;
+  }
+  validateChoiceExamples(keys, examples);
+  return {
+    examples,
+    inputPrompt: question.inputPrompt ?? 'CLASSIFICATION',
+    balanceClassWeights: question.balanceClassWeights ?? true,
+  };
+}
+
+/** Checks the example rules of every question in a schema. */
+function validateSchemaExamples(questions: ClassifierQuestion[]): void {
+  for (const q of questions) {
+    if (q.type === 'binary' || q.type === 'boolean') {
+      resolveBooleanExamples(q);
+    } else if (q.type === 'categorical' || q.type === 'choice') {
+      const options = q.options ?? [];
+      const examples: Record<string, string[] | undefined> = {};
+      if (options.some((o) => (o.examples?.length ?? 0) > 0)) {
+        for (const o of options) examples[o.label] = o.examples;
+      }
+      validateChoiceExamples(
+        options.map((o) => o.label),
+        examples,
+      );
+    }
+  }
+}
+
+function hasQuestionMedia(question?: {
+  imageBytes?: Uint8Array;
+  audioSamples?: Float32Array;
+}): boolean {
+  return (
+    Boolean(question?.imageBytes && question.imageBytes.byteLength > 0) ||
+    Boolean(question?.audioSamples && question.audioSamples.length > 0)
+  );
+}
+
+function normalizeContextInput(
+  input: string | DecisionContextInput,
+  fallbackMedia?: {imageBytes?: Uint8Array; audioSamples?: Float32Array},
+): {
+  text: string;
+  imageBytes?: Uint8Array;
+  audioSamples?: Float32Array;
+  hasMedia: boolean;
+} {
+  const isObj = typeof input === 'object' && input !== null;
+  const text = isObj ? (input.text ?? '') : input;
+  const imageBytes =
+    (isObj ? input.imageBytes : undefined) ?? fallbackMedia?.imageBytes;
+  const audioSamples =
+    (isObj ? input.audioSamples : undefined) ?? fallbackMedia?.audioSamples;
+  const hasMedia =
+    Boolean(imageBytes && imageBytes.byteLength > 0) ||
+    Boolean(audioSamples && audioSamples.length > 0);
+  return {text, imageBytes, audioSamples, hasMedia};
 }
 
 function estimateTokens(text: string): number {
@@ -179,6 +408,16 @@ function resolveChoiceCriteria(
   if (question.options) {
     for (const opt of question.options) {
       criteria[opt.label] = opt.description ?? '';
+    }
+  }
+  // A question with only examples takes its choice keys from them.
+  const examples = question.examples;
+  if (Object.keys(criteria).length === 0 && examples) {
+    const exampleKeys = Object.keys(examples);
+    if (exampleKeys.some((k) => (getOwn(examples, k)?.length ?? 0) > 0)) {
+      for (const k of exampleKeys) {
+        criteria[k] = '';
+      }
     }
   }
   return criteria;
@@ -206,6 +445,66 @@ function resolveScoreRubric(question: ScoreQuestion): {
   const labels = rubric.map((_, i) => String(i));
   const levels = rubric.map((_, i) => i);
   return {rubric, labels, levels, hasCustomLevels: false};
+}
+
+const DEFAULT_CONFORMAL_COVERAGE = 0.9;
+
+function computePredictionSetFromPairs(
+  items: Array<{key: string; probability: number}>,
+  coverage = DEFAULT_CONFORMAL_COVERAGE,
+): string[] {
+  if (items.length === 0) return [];
+  const sorted = [...items].sort((a, b) => {
+    if (a.probability !== b.probability) return b.probability - a.probability;
+    return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
+  });
+  const clampedCoverage = Math.min(1, Math.max(0, coverage));
+  const predictionSet: string[] = [];
+  let cumulative = 0;
+  for (const item of sorted) {
+    predictionSet.push(item.key);
+    cumulative += item.probability;
+    if (cumulative >= clampedCoverage) {
+      break;
+    }
+  }
+  return predictionSet;
+}
+
+function enrichChoiceResult(raw: RawWasmChoiceResult): ChoiceResult {
+  if (raw.predictionSet !== undefined) {
+    return {...raw, predictionSet: raw.predictionSet};
+  }
+  const items = Object.entries(raw.probabilities ?? {}).map(
+    ([key, probability]) => ({key, probability}),
+  );
+  return {
+    ...raw,
+    predictionSet: computePredictionSetFromPairs(items),
+  };
+}
+
+function enrichClassifierResult(
+  raw: ClassifierResult,
+  questions: ClassifierQuestion[],
+): ClassifierResult {
+  const out: ClassifierResult = {...raw};
+  for (const q of questions) {
+    if (q.type !== 'categorical' && q.type !== 'choice') continue;
+    const dec = out[q.id];
+    if (dec && dec.predictionSet === undefined) {
+      out[q.id] = {
+        ...dec,
+        predictionSet: computePredictionSetFromPairs(
+          (dec.probabilities ?? []).map((p) => ({
+            key: p.label,
+            probability: p.probability,
+          })),
+        ),
+      };
+    }
+  }
+  return out;
 }
 
 function enrichOrdinalResult(
@@ -359,33 +658,44 @@ export class DecisionMaker extends TaskRunner {
     return 'DecisionMaker';
   }
 
+  private invocationQueue: Promise<unknown> = Promise.resolve();
+
   /**
-   * Runs a native evaluation and records it with the usage logger: input
-   * arrival is recorded before `run()` is invoked and invocation end once the
-   * returned promise settles.
+   * Runs a native evaluation serialized through `invocationQueue` (preventing
+   * concurrent Asyncify Wasm re-entry while holding native mutexes) and records
+   * it with the usage logger.
    */
   private logInvocation<T>(run: () => Promise<T>): Promise<T> {
-    const timestamp = this.loggerTimestamp++;
-    if (this.logger) {
-      if (
-        this.backendType === ENCODER_BACKEND_TYPE ||
-        this.backendType === CPU_DELEGATE_BACKEND_TYPE
-      ) {
-        this.logger.recordCpuInputArrival(timestamp);
-      } else {
-        this.logger.recordGpuInputArrival(timestamp);
+    const next = this.invocationQueue.then(() => {
+      const timestamp = this.loggerTimestamp++;
+      if (this.logger) {
+        if (
+          this.backendType === ENCODER_BACKEND_TYPE ||
+          this.backendType === CPU_DELEGATE_BACKEND_TYPE
+        ) {
+          this.logger.recordCpuInputArrival(timestamp);
+        } else {
+          this.logger.recordGpuInputArrival(timestamp);
+        }
       }
-    }
-    return run().then(
-      (result) => {
-        this.logger?.recordInvocationEnd(timestamp);
-        return result;
-      },
-      (error: unknown) => {
-        this.logger?.recordInvocationEnd(timestamp);
-        throw error;
-      },
+      return Promise.resolve()
+        .then(run)
+        .then(
+          (result) => {
+            this.logger?.recordInvocationEnd(timestamp);
+            return result;
+          },
+          (error: unknown) => {
+            this.logger?.recordInvocationEnd(timestamp);
+            throw error;
+          },
+        );
+    });
+    this.invocationQueue = next.then(
+      () => {},
+      () => {},
     );
+    return next;
   }
 
   /**
@@ -427,22 +737,167 @@ export class DecisionMaker extends TaskRunner {
     if (this.makerPtr === 0) return;
     const questions = schema.questions ?? [];
     if (questions.length === 0) return;
+    validateSchemaExamples(questions);
     const wasmModule = this.graphRunner
       .wasmModule as unknown as DecisionMakerWasmModule;
     if (typeof wasmModule.prewarmSchema === 'function') {
-      await wasmModule.prewarmSchema(
-        this.makerPtr,
-        schema.context ?? '',
-        questions,
+      await this.logInvocation(() =>
+        wasmModule.prewarmSchema!(
+          this.makerPtr,
+          schema.context ?? '',
+          questions,
+        ),
       );
-    } else if (typeof wasmModule.evaluateSchema === 'function') {
-      await wasmModule.evaluateSchema(
-        this.makerPtr,
-        '__PREWARM__',
-        schema.context ?? '',
-        questions,
+    } else {
+      await this.logInvocation(() =>
+        wasmModule.evaluateSchema(
+          this.makerPtr,
+          '__PREWARM__',
+          schema.context ?? '',
+          questions,
+        ),
       );
     }
+  }
+
+  /**
+   * Prewarms candidate choice options in Wasm memory before evaluation.
+   *
+   * @export
+   * @param question The categorical choice question whose options should be
+   *     prewarmed.
+   */
+  async prewarmChoice(question: ChoiceQuestion): Promise<void> {
+    if (this.makerPtr === 0) return;
+    const criteria = resolveChoiceCriteria(question);
+    if (Object.keys(criteria).length === 0) return;
+    const examples = resolveChoiceExamples(question, criteria);
+    const baseInstructions = question.instructions ?? '';
+    const instructions = question.context
+      ? baseInstructions
+        ? `${question.context}\n${baseInstructions}`
+        : question.context
+      : baseInstructions;
+    const wasmModule = this.graphRunner
+      .wasmModule as unknown as DecisionMakerWasmModule;
+    if (typeof wasmModule.prewarmChoice === 'function') {
+      await this.logInvocation(() =>
+        wasmModule.prewarmChoice!(
+          this.makerPtr,
+          criteria,
+          question.options ?? [],
+          question.temperature ?? 0,
+          instructions,
+          question.normalizePrior ?? false,
+          examples,
+        ),
+      );
+      return;
+    }
+    const optionsByLabel = new Map<string, ClassifierOption>();
+    for (const opt of question.options ?? []) {
+      optionsByLabel.set(opt.label, opt);
+    }
+    const options: ClassifierOption[] = Object.entries(criteria).map(
+      ([label, description]) => {
+        const existing = optionsByLabel.get(label);
+        const option = existing
+          ? {...existing, label, description}
+          : {label, description};
+        const choiceExamples = getOwn(examples.examples, label);
+        return choiceExamples ? {...option, examples: choiceExamples} : option;
+      },
+    );
+    await this.prewarm({
+      context: question.context,
+      questions: [
+        {
+          id: '__choice__',
+          type: 'choice',
+          prompt: baseInstructions,
+          options,
+          temperature: question.temperature,
+          normalizePrior: question.normalizePrior,
+          ...(question.inputPrompt !== undefined
+            ? {inputPrompt: question.inputPrompt}
+            : {}),
+          ...(question.balanceClassWeights !== undefined
+            ? {balanceClassWeights: question.balanceClassWeights}
+            : {}),
+        },
+      ],
+    });
+  }
+
+  /**
+   * Prewarms a boolean predicate question in Wasm memory before evaluation.
+   *
+   * @export
+   * @param question The boolean question to prewarm.
+   */
+  async prewarmBoolean(question: BooleanQuestion): Promise<void> {
+    if (this.makerPtr === 0) return;
+    const examples = resolveBooleanExamples(question);
+    if (
+      question.options &&
+      question.options.length >= 2 &&
+      !hasBooleanExamples(question)
+    ) {
+      await this.prewarmChoice({
+        options: question.options,
+        instructions: question.condition,
+        context: question.context,
+        temperature: question.temperature,
+        normalizePrior: question.normalizePrior,
+      });
+      return;
+    }
+    await this.prewarm({
+      context: question.context,
+      questions: [
+        {
+          id: '__boolean__',
+          type: 'boolean',
+          prompt: question.condition ?? '',
+          threshold: question.threshold,
+          temperature: question.temperature,
+          normalizePrior: question.normalizePrior,
+          ...(hasBooleanExamples(question)
+            ? {
+                positiveExamples: examples.positiveExamples,
+                negativeExamples: examples.negativeExamples,
+              }
+            : {}),
+          ...(question.inputPrompt !== undefined
+            ? {inputPrompt: question.inputPrompt}
+            : {}),
+        },
+      ],
+    });
+  }
+
+  /**
+   * Prewarms an ordinal score rubric question in Wasm memory before evaluation.
+   *
+   * @export
+   * @param question The score question to prewarm.
+   */
+  async prewarmScore(question: ScoreQuestion): Promise<void> {
+    if (this.makerPtr === 0) return;
+    const {rubric} = resolveScoreRubric(question);
+    if (rubric.length === 0) return;
+    await this.prewarm({
+      context: question.context,
+      questions: [
+        {
+          id: '__score__',
+          type: 'score',
+          prompt: question.instructions ?? '',
+          options: rubric.map((desc) => ({label: '', description: desc})),
+          temperature: question.temperature,
+        },
+      ],
+    });
   }
 
   private computeSchemaTokens(schema?: ClassifierSchema): number {
@@ -744,7 +1199,6 @@ export class DecisionMaker extends TaskRunner {
             for (const feat of [
               'shader-f16',
               'subgroups',
-              'subgroups-f16',
             ] as GPUFeatureName[]) {
               if (adapter.features.has(feat)) {
                 requiredFeatures.push(feat);
@@ -756,6 +1210,7 @@ export class DecisionMaker extends TaskRunner {
               'maxStorageBufferBindingSize',
               'maxStorageBuffersPerShaderStage',
               'maxComputeWorkgroupStorageSize',
+              'maxTextureDimension2D',
             ]) {
               const val = (
                 adapter.limits as unknown as Record<string, number | undefined>
@@ -872,46 +1327,118 @@ export class DecisionMaker extends TaskRunner {
   }
 
   /**
-   * Evaluates a Boolean Predicate condition against input text.
+   * Evaluates a Boolean Predicate condition against input text or multimodal context.
    *
    * @export
-   * @param text The input text to be evaluated.
+   * @param text The input text or multimodal context to be evaluated.
    * @param question The boolean question to evaluate.
    * @return The boolean evaluation result.
    */
   evaluateBoolean(
-    text: string,
+    text: string | DecisionContextInput,
     question: BooleanQuestion,
   ): Promise<BooleanResult> {
     if (this.makerPtr === 0) {
       throw new Error('Decision is already closed.');
     }
+    const examples = resolveBooleanExamples(question);
+    // With examples, custom options are ignored and the question stays a
+    // Boolean.
+    if (
+      question.options &&
+      question.options.length >= 2 &&
+      !hasBooleanExamples(question)
+    ) {
+      const threshold =
+        question.threshold !== undefined && question.threshold > 0
+          ? question.threshold
+          : 0.5;
+      return this.evaluateChoice(text, {
+        options: question.options,
+        instructions: question.condition,
+        context: question.context,
+        temperature: question.temperature,
+        normalizePrior: question.normalizePrior,
+        imageBytes: question.imageBytes,
+        audioSamples: question.audioSamples,
+      }).then((choiceRes) => {
+        const opts = question.options!;
+        const affirmRe = /^(true|yes|1|allow|allowed|entailment|supported)$/i;
+        const negRe =
+          /^(false|no|0|deny|denied|reject|rejected|contradiction|contradicted|refuted)$/i;
+        let affirmOpt = opts.find((o) => affirmRe.test(o.label.trim()));
+        if (!affirmOpt) {
+          affirmOpt =
+            negRe.test(opts[1].label.trim()) &&
+            !negRe.test(opts[0].label.trim())
+              ? opts[0]
+              : opts[1];
+        }
+        const probabilityTrue = choiceRes.probabilities[affirmOpt.label] ?? 0;
+        const value = probabilityTrue >= threshold;
+        const confidence =
+          threshold > 0 && threshold < 1
+            ? Math.min(
+                1,
+                Math.max(
+                  0,
+                  value
+                    ? (probabilityTrue - threshold) / (1 - threshold)
+                    : (threshold - probabilityTrue) / threshold,
+                ),
+              )
+            : choiceRes.confidence;
+        return {value, probabilityTrue, confidence};
+      });
+    }
     const wasmModule = this.graphRunner
       .wasmModule as unknown as DecisionMakerWasmModule;
+    // Matches the schema path (used by prewarmBoolean), which drops the
+    // newline when there is no condition, so both share one fingerprint.
     const condition = question.context
-      ? `${question.context}\n${question.condition}`
-      : question.condition;
+      ? question.condition
+        ? `${question.context}\n${question.condition}`
+        : question.context
+      : (question.condition ?? '');
+    const normalizePrior = question.normalizePrior ?? false;
+    const norm = normalizeContextInput(text, question);
+    if (norm.hasMedia) {
+      return this.logInvocation(() =>
+        wasmModule.evaluateContextBoolean(
+          this.makerPtr,
+          norm.text,
+          condition,
+          question.threshold ?? 0.5,
+          question.temperature ?? 0,
+          {imageBytes: norm.imageBytes, audioSamples: norm.audioSamples},
+          normalizePrior,
+          examples,
+        ),
+      );
+    }
     return this.logInvocation(() =>
       wasmModule.evaluateBoolean(
         this.makerPtr,
-        text,
+        norm.text,
         condition,
         question.threshold ?? 0.5,
         question.temperature ?? 0,
+        normalizePrior,
+        examples,
       ),
     );
   }
 
   /**
-   * Evaluates a Categorical Choice against input text.
+   * Evaluates a Categorical Choice against input text or multimodal context.
    *
    * @export
-   * @param text The input text to be evaluated.
+   * @param text The input text or multimodal context to be evaluated.
    * @param question The choice question to evaluate.
    * @return The choice evaluation result.
    */
   evaluateChoice(
-    text: string,
+    text: string | DecisionContextInput,
     question: ChoiceQuestion,
   ): Promise<ChoiceResult> {
     if (this.makerPtr === 0) {
@@ -920,33 +1447,59 @@ export class DecisionMaker extends TaskRunner {
     const wasmModule = this.graphRunner
       .wasmModule as unknown as DecisionMakerWasmModule;
     const criteria = resolveChoiceCriteria(question);
+    const examples = resolveChoiceExamples(question, criteria);
     const baseInstructions = question.instructions ?? '';
     const instructions = question.context
       ? baseInstructions
         ? `${question.context}\n${baseInstructions}`
         : question.context
       : baseInstructions;
-    return this.logInvocation(() =>
-      wasmModule.evaluateChoice(
-        this.makerPtr,
-        text,
-        criteria,
-        question.temperature ?? 0,
-        instructions,
-      ),
+    const normalizePrior = question.normalizePrior ?? false;
+    const norm = normalizeContextInput(text, question);
+    const hasOptionMedia = (question.options ?? []).some(
+      (o) =>
+        (o.imageBytes && o.imageBytes.byteLength > 0) ||
+        (o.audioSamples && o.audioSamples.length > 0),
     );
+    const evalPromise =
+      norm.hasMedia || hasOptionMedia
+        ? this.logInvocation(() =>
+            wasmModule.evaluateContextChoice(
+              this.makerPtr,
+              norm.text,
+              criteria,
+              question.options ?? [],
+              question.temperature ?? 0,
+              instructions,
+              {imageBytes: norm.imageBytes, audioSamples: norm.audioSamples},
+              normalizePrior,
+              examples,
+            ),
+          )
+        : this.logInvocation(() =>
+            wasmModule.evaluateChoice(
+              this.makerPtr,
+              norm.text,
+              criteria,
+              question.temperature ?? 0,
+              instructions,
+              normalizePrior,
+              examples,
+            ),
+          );
+    return evalPromise.then(enrichChoiceResult);
   }
 
   /**
-   * Evaluates an Ordinal Score rubric against input text.
+   * Evaluates an Ordinal Score rubric against input text or multimodal context.
    *
    * @export
-   * @param text The input text to be evaluated.
+   * @param text The input text or multimodal context to be evaluated.
    * @param question The score question to evaluate.
    * @return The score evaluation result.
    */
   async evaluateScore(
-    text: string,
+    text: string | DecisionContextInput,
     question: ScoreQuestion,
   ): Promise<ScoreResult> {
     if (this.makerPtr === 0) {
@@ -962,15 +1515,27 @@ export class DecisionMaker extends TaskRunner {
         ? `${question.context}\n${baseInstructions}`
         : question.context
       : baseInstructions;
-    const raw = await this.logInvocation(() =>
-      wasmModule.evaluateScore(
-        this.makerPtr,
-        text,
-        rubric,
-        question.temperature ?? 0,
-        instructions,
-      ),
-    );
+    const norm = normalizeContextInput(text, question);
+    const raw = norm.hasMedia
+      ? await this.logInvocation(() =>
+          wasmModule.evaluateContextScore(
+            this.makerPtr,
+            norm.text,
+            rubric,
+            question.temperature ?? 0,
+            instructions,
+            {imageBytes: norm.imageBytes, audioSamples: norm.audioSamples},
+          ),
+        )
+      : await this.logInvocation(() =>
+          wasmModule.evaluateScore(
+            this.makerPtr,
+            norm.text,
+            rubric,
+            question.temperature ?? 0,
+            instructions,
+          ),
+        );
     return enrichOrdinalResult(raw, labels, levels, hasCustomLevels);
   }
 
@@ -980,13 +1545,13 @@ export class DecisionMaker extends TaskRunner {
    * with `window.Classifier`).
    *
    * @export
-   * @param input The input text to be evaluated.
+   * @param input The input text or multimodal context to be evaluated.
    * @param schema The schema containing the questions to evaluate.
    * @param options Optional per-call evaluation options.
    * @return The results keyed by question `id`.
    */
   async evaluate(
-    input: string,
+    input: string | DecisionContextInput,
     schema: ClassifierSchema,
     options?: ClassifierEvaluateOptions,
   ): Promise<ClassifierResult> {
@@ -996,118 +1561,70 @@ export class DecisionMaker extends TaskRunner {
     if (options?.signal?.aborted) {
       throw new DOMException('The operation was aborted.', 'AbortError');
     }
-    const stateText = options?.context ? `${options.context}\n${input}` : input;
+    const norm = normalizeContextInput(input, options);
+    const stateText = options?.context
+      ? norm.text
+        ? `${options.context}\n${norm.text}`
+        : options.context
+      : norm.text;
     const schemaContext = schema.context;
+    const mediaTokens =
+      (norm.imageBytes && norm.imageBytes.byteLength > 0 ? 70 : 0) +
+      (norm.audioSamples && norm.audioSamples.length > 0
+        ? Math.ceil(norm.audioSamples.length / 640)
+        : 0);
     this.lastContextUsage =
-      this.computeSchemaTokens(schema) + estimateTokens(stateText);
+      this.computeSchemaTokens(schema) +
+      estimateTokens(stateText) +
+      mediaTokens;
 
     const wasmModule = this.graphRunner
       .wasmModule as unknown as DecisionMakerWasmModule;
-    if (
-      typeof wasmModule.evaluateSchema === 'function' &&
-      (schema.questions ?? []).length > 0
-    ) {
-      return this.logInvocation(() =>
-        wasmModule.evaluateSchema!(
-          this.makerPtr,
-          stateText,
-          schemaContext ?? '',
-          schema.questions ?? [],
-        ),
-      );
+    const questions = schema.questions ?? [];
+    if (questions.length === 0) {
+      return {};
     }
-
-    const output: ClassifierResult = {};
-    for (const q of schema.questions ?? []) {
-      if (q.type === 'binary' || q.type === 'boolean') {
-        const res = await this.evaluateBoolean(stateText, {
-          condition: q.prompt,
-          context: schemaContext,
-          threshold: q.threshold,
-          temperature: q.temperature,
-          normalizePrior: q.normalizePrior,
-          options: q.options,
-        });
-        const pTrue = res.probabilityTrue;
-        const threshold = q.threshold ?? 0.5;
-        const falseLabel =
-          q.options && q.options.length >= 2 ? q.options[0].label : 'false';
-        const trueLabel =
-          q.options && q.options.length >= 2 ? q.options[1].label : 'true';
-        const label = pTrue >= threshold ? trueLabel : falseLabel;
-        output[q.id] = {
-          id: q.id,
-          label,
-          confidence: res.confidence,
-          probability: pTrue,
-          probabilities: [
-            {label: falseLabel, probability: Math.max(0, 1 - pTrue)},
-            {label: trueLabel, probability: pTrue},
-          ],
-        };
-      } else if (q.type === 'categorical' || q.type === 'choice') {
-        const res = await this.evaluateChoice(stateText, {
-          options: q.options,
-          instructions: q.prompt,
-          context: schemaContext,
-          temperature: q.temperature,
-          normalizePrior: q.normalizePrior,
-        });
-        const orderedLabels = (q.options ?? []).map((o) => o.label);
-        const probabilities: ClassifierOptionProbability[] =
-          orderedLabels.length > 0
-            ? orderedLabels.map((l) => ({
-                label: l,
-                probability: res.probabilities[l] ?? 0,
-              }))
-            : Object.entries(res.probabilities).map(([l, p]) => ({
-                label: l,
-                probability: p,
-              }));
-        output[q.id] = {
-          id: q.id,
-          label: res.selectedKey,
-          confidence: res.confidence,
-          probabilities,
-          predictionSet: res.predictionSet,
-        };
-      } else if (q.type === 'ordinal' || q.type === 'score') {
-        const res = await this.evaluateScore(stateText, {
-          options: q.options,
-          instructions: q.prompt,
-          context: schemaContext,
-          temperature: q.temperature,
-        });
-        const labels = (q.options ?? []).map((o) => o.label);
-        const probabilities: ClassifierOptionProbability[] = (
-          res.probabilities ?? []
-        ).map((p, i) => ({
-          label: i < labels.length ? labels[i] : String(i),
-          probability: p,
-        }));
-        output[q.id] = {
-          id: q.id,
-          label: res.selectedKey ?? labels[0] ?? '0',
-          confidence: res.confidence,
-          expectedScore: res.expectedScore,
-          probabilities,
-        };
-      }
-    }
-    return output;
+    validateSchemaExamples(questions);
+    const hasOptionMedia = questions.some((q) =>
+      (q.options ?? []).some(
+        (o) =>
+          (o.imageBytes && o.imageBytes.byteLength > 0) ||
+          (o.audioSamples && o.audioSamples.length > 0),
+      ),
+    );
+    const raw =
+      norm.hasMedia || hasOptionMedia
+        ? await this.logInvocation(() =>
+            wasmModule.evaluateContextSchema(
+              this.makerPtr,
+              stateText,
+              schemaContext ?? '',
+              questions,
+              {imageBytes: norm.imageBytes, audioSamples: norm.audioSamples},
+            ),
+          )
+        : await this.logInvocation(() =>
+            wasmModule.evaluateSchema(
+              this.makerPtr,
+              stateText,
+              schemaContext ?? '',
+              questions,
+            ),
+          );
+    return enrichClassifierResult(raw, questions);
   }
 
   /**
    * Evaluates a multi-question `ClassifierSchema` across a batch of `inputs`.
    *
    * @export
-   * @param inputs The input texts to be evaluated.
+   * @param inputs The input texts or multimodal contexts to be evaluated.
    * @param schema The schema containing the questions to evaluate.
    * @param options Optional per-call evaluation options.
    * @return One result per input, in the same order as `inputs`.
    */
   async evaluateBatch(
-    inputs: string[],
+    inputs: Array<string | DecisionContextInput>,
     schema: ClassifierSchema,
     options?: ClassifierEvaluateOptions,
   ): Promise<ClassifierResult[]> {
@@ -1123,12 +1640,12 @@ export class DecisionMaker extends TaskRunner {
    * via `DecisionMakerOptions` or `setSchema()`.
    *
    * @export
-   * @param input The input text to be evaluated.
+   * @param input The input text or multimodal context to be evaluated.
    * @param options Optional per-call evaluation options.
    * @return The results keyed by question `id`.
    */
   async classify(
-    input: string,
+    input: string | DecisionContextInput,
     options?: ClassifierEvaluateOptions,
   ): Promise<ClassifierResult> {
     if (!this.sessionSchema) {
@@ -1163,10 +1680,23 @@ export class DecisionMaker extends TaskRunner {
     }
     const wasmModule = this.graphRunner
       .wasmModule as unknown as DecisionMakerWasmModule;
+    // Matches the schema path (used by prewarmBoolean), which drops the
+    // newline when there is no condition, so both share one fingerprint.
     const condition = question.context
-      ? `${question.context}\n${question.condition}`
-      : question.condition;
-    if (typeof wasmModule.evaluateBooleanBatch === 'function') {
+      ? question.condition
+        ? `${question.context}\n${question.condition}`
+        : question.context
+      : (question.condition ?? '');
+    const examples = resolveBooleanExamples(question);
+    if (
+      !hasQuestionMedia(question) &&
+      !(
+        question.options &&
+        question.options.length >= 2 &&
+        !hasBooleanExamples(question)
+      ) &&
+      typeof wasmModule.evaluateBooleanBatch === 'function'
+    ) {
       return this.logInvocation(() =>
         wasmModule.evaluateBooleanBatch!(
           this.makerPtr,
@@ -1175,6 +1705,8 @@ export class DecisionMaker extends TaskRunner {
           question.threshold ?? 0.5,
           question.temperature ?? 0,
           sharedPrefix,
+          question.normalizePrior ?? false,
+          examples,
         ),
       );
     }
@@ -1210,14 +1742,24 @@ export class DecisionMaker extends TaskRunner {
     const wasmModule = this.graphRunner
       .wasmModule as unknown as DecisionMakerWasmModule;
     const criteria = resolveChoiceCriteria(question);
+    const examples = resolveChoiceExamples(question, criteria);
     const baseInstructions = question.instructions ?? '';
     const instructions = question.context
       ? baseInstructions
         ? `${question.context}\n${baseInstructions}`
         : question.context
       : baseInstructions;
-    if (typeof wasmModule.evaluateChoiceBatch === 'function') {
-      return this.logInvocation(() =>
+    const hasOptionMedia = (question.options ?? []).some(
+      (o) =>
+        (o.imageBytes && o.imageBytes.byteLength > 0) ||
+        (o.audioSamples && o.audioSamples.length > 0),
+    );
+    if (
+      !hasQuestionMedia(question) &&
+      !hasOptionMedia &&
+      typeof wasmModule.evaluateChoiceBatch === 'function'
+    ) {
+      const rawBatch = await this.logInvocation(() =>
         wasmModule.evaluateChoiceBatch!(
           this.makerPtr,
           texts,
@@ -1225,8 +1767,11 @@ export class DecisionMaker extends TaskRunner {
           question.temperature ?? 0,
           instructions,
           sharedPrefix,
+          question.normalizePrior ?? false,
+          examples,
         ),
       );
+      return rawBatch.map(enrichChoiceResult);
     }
     const results: ChoiceResult[] = [];
     for (const t of texts) {
@@ -1267,7 +1812,10 @@ export class DecisionMaker extends TaskRunner {
         ? `${question.context}\n${baseInstructions}`
         : question.context
       : baseInstructions;
-    if (typeof wasmModule.evaluateScoreBatch === 'function') {
+    if (
+      !hasQuestionMedia(question) &&
+      typeof wasmModule.evaluateScoreBatch === 'function'
+    ) {
       const rawBatch = await this.logInvocation(() =>
         wasmModule.evaluateScoreBatch!(
           this.makerPtr,

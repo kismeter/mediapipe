@@ -44,6 +44,21 @@ IMAGE_EMBEDDER_DEPS = [
 ]
 
 cc_library(
+    name = "image_embedder",
+    hdrs = ["image_embedder.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":image_embedder_c_lib",
+        "//mediapipe/tasks/c/components/containers:embedding_result",
+        "//mediapipe/tasks/c/components/processors:embedder_options",
+        "//mediapipe/tasks/c/core:base_options",
+        "//mediapipe/tasks/c/core:mp_status",
+        "//mediapipe/tasks/c/vision/core:image",
+        "//mediapipe/tasks/c/vision/core:image_processing_options",
+    ],
+)
+
+cc_library(
     name = "image_embedder_lib",
     srcs = ["image_embedder.cc"],
     hdrs = [
@@ -89,7 +104,6 @@ cc_test(
         "//mediapipe/tasks/c/vision/core:image_test_util",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
     ],

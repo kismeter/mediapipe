@@ -18,6 +18,8 @@
 #include <memory>
 #include <vector>
 
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
 #include "mediapipe/examples/desktop/autoflip/autoflip_messages.pb.h"
 #include "mediapipe/examples/desktop/autoflip/calculators/border_detection_calculator.pb.h"
 #include "mediapipe/framework/calculator_framework.h"
@@ -26,7 +28,7 @@
 #include "mediapipe/framework/port/opencv_core_inc.h"
 #include "mediapipe/framework/port/opencv_imgproc_inc.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status.h"
+#include "mediapipe/framework/port/status_builder.h"
 
 using mediapipe::ImageFrame;
 using mediapipe::PacketTypeSet;
@@ -187,7 +189,7 @@ double BorderDetectionCalculator::FindDominantColor(const cv::Mat& image_raw,
   cv::Mat reshaped = float_data.reshape(1, float_data.total());
 
   cv::kmeans(reshaped, kKMeansClusterCount, cluster,
-             cv::TermCriteria(CV_TERMCRIT_ITER, 5, 1.0), 1,
+             cv::TermCriteria(cv::TermCriteria::MAX_ITER, 5, 1.0), 1,
              cv::KMEANS_PP_CENTERS, cluster_center);
 
   std::vector<int> count(kKMeansClusterCount, 0);

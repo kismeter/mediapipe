@@ -17,10 +17,10 @@
 #include <string>
 #include <vector>
 
-#include "absl/log/absl_check.h"
-#include "absl/memory/memory.h"
-#include "absl/status/status.h"
-#include "absl/strings/str_cat.h"
+#include "absl/log/absl_check.h"   // from @com_google_absl
+#include "absl/memory/memory.h"    // from @com_google_absl
+#include "absl/status/status.h"    // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
 #include "mediapipe/calculators/image/opencv_image_encoder_calculator.pb.h"
 #include "mediapipe/calculators/tensorflow/pack_media_sequence_calculator.pb.h"
 #include "mediapipe/framework/calculator_framework.h"
@@ -34,8 +34,8 @@
 #include "mediapipe/framework/timestamp.h"
 #include "mediapipe/util/sequence/media_sequence.h"
 #include "mediapipe/util/sequence/media_sequence_util.h"
-#include "tensorflow/core/example/example.pb.h"
-#include "tensorflow/core/example/feature.pb.h"
+#include "tensorflow/core/example/example.pb.h"  // from @org_tensorflow
+#include "tensorflow/core/example/feature.pb.h"  // from @org_tensorflow
 #include "testing/base/public/gmock.h"
 #include "testing/base/public/gunit.h"
 
@@ -1347,7 +1347,7 @@ TEST_F(PackMediaSequenceCalculatorTest, PackTwoClipLabels_NoLabelOrLabelIndex) {
 
   ASSERT_THAT(
       runner_->Run(),
-      testing::status::StatusIs(
+      absl_testing::StatusIs(
           absl::StatusCode::kInvalidArgument,
           testing::HasSubstr(
               "detection.label and detection.label_id can't be both empty")));
@@ -1412,7 +1412,7 @@ TEST_F(PackMediaSequenceCalculatorTest,
 
   ASSERT_THAT(
       runner_->Run(),
-      testing::status::StatusIs(
+      absl_testing::StatusIs(
           absl::StatusCode::kInvalidArgument,
           testing::HasSubstr(
               "Different size of detection.label and detection.score")));
@@ -1449,7 +1449,7 @@ TEST_F(PackMediaSequenceCalculatorTest,
 
   ASSERT_THAT(
       runner_->Run(),
-      testing::status::StatusIs(
+      absl_testing::StatusIs(
           absl::StatusCode::kInvalidArgument,
           testing::HasSubstr(
               "Different size of detection.label_id and detection.score")));
@@ -1607,7 +1607,7 @@ TEST_F(PackMediaSequenceCalculatorTest,
       Adopt(input_sequence.release());
 
   ASSERT_THAT(runner_->Run(),
-              testing::status::StatusIs(absl::StatusCode::kInvalidArgument));
+              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST_F(PackMediaSequenceCalculatorTest, AddClipMediaId) {

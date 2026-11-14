@@ -27,11 +27,12 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "absl/flags/flag.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/cord.h"
-#include "absl/strings/str_cat.h"
+#include "absl/flags/flag.h"       // from @com_google_absl
+#include "absl/log/absl_log.h"     // from @com_google_absl
+#include "absl/status/status.h"    // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
+#include "absl/strings/cord.h"     // from @com_google_absl
+#include "absl/strings/str_cat.h"  // from @com_google_absl
 #include "mediapipe/framework/deps/file_path.h"
 #include "mediapipe/framework/port/gmock.h"
 #include "mediapipe/framework/port/gtest.h"
@@ -39,7 +40,7 @@ limitations under the License.
 #include "mediapipe/tasks/cc/common.h"
 #include "mediapipe/tasks/cc/components/containers/embedding_result.h"
 #include "mediapipe/tasks/cc/core/embedding_provider.h"
-#include "tflite/test_util.h"
+#include "tflite/test_util.h"  // from @litert
 
 namespace mediapipe::tasks::text::text_embedder {
 namespace {

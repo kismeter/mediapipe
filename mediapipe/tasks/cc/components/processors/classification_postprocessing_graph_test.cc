@@ -21,11 +21,12 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include "absl/flags/flag.h"
-#include "absl/memory/memory.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
+#include "absl/flags/flag.h"            // from @com_google_absl
+#include "absl/memory/memory.h"         // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
+#include "absl/strings/string_view.h"   // from @com_google_absl
 #include "mediapipe/calculators/tensor/tensors_to_classification_calculator.pb.h"
 #include "mediapipe/framework/api2/builder.h"
 #include "mediapipe/framework/api2/packet.h"
@@ -49,7 +50,7 @@ limitations under the License.
 #include "mediapipe/tasks/cc/core/model_resources.h"
 #include "mediapipe/tasks/cc/core/proto/external_file.pb.h"
 #include "mediapipe/util/label_map.pb.h"
-#include "tflite/test_util.h"
+#include "tflite/test_util.h"  // from @litert
 
 namespace mediapipe {
 namespace tasks {

@@ -25,14 +25,14 @@
 #include <vector>
 
 #include "HalideBuffer.h"
-#include "absl/functional/any_invocable.h"
-#include "absl/log/absl_log.h"
-#include "absl/log/check.h"
-#include "absl/log/log.h"
-#include "absl/status/status.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/str_format.h"
-#include "absl/strings/string_view.h"
+#include "absl/functional/any_invocable.h"  // from @com_google_absl
+#include "absl/log/absl_log.h"              // from @com_google_absl
+#include "absl/log/check.h"                 // from @com_google_absl
+#include "absl/log/log.h"                   // from @com_google_absl
+#include "absl/status/status.h"             // from @com_google_absl
+#include "absl/strings/str_cat.h"           // from @com_google_absl
+#include "absl/strings/str_format.h"        // from @com_google_absl
+#include "absl/strings/string_view.h"       // from @com_google_absl
 #include "mediapipe/framework/formats/image.h"
 #include "mediapipe/framework/formats/image_frame.h"
 #include "mediapipe/framework/formats/image_frame_opencv.h"
@@ -102,6 +102,14 @@ GetMatElementAccessor(const cv::Mat& mat) {
       return [](const uint8_t* mat_ptr, int idx) -> double {
         return reinterpret_cast<const double*>(mat_ptr)[idx];
       };
+    case CV_16F:
+      return [](const uint8_t* mat_ptr, int idx) -> double {
+#if CV_VERSION_MAJOR >= 5
+        return reinterpret_cast<const cv::hfloat*>(mat_ptr)[idx];
+#else
+        return reinterpret_cast<const cv::float16_t*>(mat_ptr)[idx];
+#endif
+      };
     default:
       return absl::UnimplementedError(
           absl::StrCat("Unhandled mat depth ", mat.depth()));
@@ -124,6 +132,8 @@ const char* MatDepthToString(int depth) {
       return "32F";
     case CV_64F:
       return "64F";
+    case CV_16F:
+      return "16F";
     default:
       return "UnknownDepth";
   }

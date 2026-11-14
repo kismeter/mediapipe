@@ -120,7 +120,6 @@ cc_library(
         "//mediapipe/framework/port:core_proto",
         "//mediapipe/framework/port:logging",
         "//mediapipe/framework/port:ret_check",
-        "//mediapipe/framework/port:status",
         "@com_google_absl//absl/log:absl_check",
         "@eigen//:eigen3",
     ],
@@ -134,6 +133,7 @@ cc_library(
         ":shared_fd",
         "//mediapipe/framework:port",
         "//mediapipe/gpu:gpu_buffer_storage",
+        "@com_google_absl//absl/status",
     ],
 )
 
@@ -145,17 +145,7 @@ cc_library(
         ":affine_transform_data_cc_proto",
         "//mediapipe/framework:port",
         "//mediapipe/framework:type_map",
-        "//mediapipe/framework/port:integral_types",
-        "//mediapipe/framework/port:logging",
         "//mediapipe/framework/port:point",
-        "//mediapipe/framework/port:ret_check",
-        "//mediapipe/framework/port:status",
-        "//mediapipe/framework/port:statusor",
-        "//mediapipe/framework/tool:status_util",
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/strings",
-        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -171,6 +161,7 @@ cc_library(
         "//mediapipe/framework/port:ret_check",
         "//mediapipe/gpu:gl_base_hdr",
         "//mediapipe/gpu:gl_context",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/synchronization",
     ],
@@ -211,8 +202,11 @@ cc_library(
     ],
     deps = [
         "//mediapipe/framework/port:ret_check",
-        "//mediapipe/framework/port:statusor",
+        "@com_google_absl//absl/functional:any_invocable",
         "@com_google_absl//absl/log:absl_check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_macros",
+        "@com_google_absl//absl/status:statusor",
     ],
 )
 
@@ -224,6 +218,9 @@ cc_library(
         ":hardware_buffer",
         "//mediapipe/gpu:multi_pool",
         "//mediapipe/gpu:reusable_pool",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_macros",
+        "@com_google_absl//absl/status:statusor",
     ],
 )
 
@@ -293,13 +290,13 @@ cc_library(
         "//mediapipe/framework/port:point",
         "//mediapipe/framework/port:rectangle",
         "//mediapipe/framework/port:ret_check",
-        "//mediapipe/framework/port:status",
-        "//mediapipe/framework/port:statusor",
         "//mediapipe/framework/tool:status_util",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/log:absl_check",
         "@com_google_absl//absl/log:absl_log",
         "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_protobuf//:protobuf",
     ] + select({
@@ -320,6 +317,8 @@ cc_library(
         "//mediapipe/framework/formats/annotation:rasterization_cc_proto",
         "//mediapipe/framework/port:opencv_imgproc",
         "@com_google_absl//absl/log:absl_log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
     ],
     alwayslink = 1,
 )
@@ -328,9 +327,11 @@ cc_test(
     name = "location_opencv_test",
     srcs = ["location_opencv_test.cc"],
     deps = [
+        ":location",
         ":location_opencv",
         "//mediapipe/framework/formats/annotation:rasterization_cc_proto",
         "//mediapipe/framework/port:gtest_main",
+        "//mediapipe/framework/port:opencv_core",
         "//mediapipe/framework/port:rectangle",
     ],
 )
@@ -534,8 +535,8 @@ cc_library(
         ":image_format_cc_proto",
         "//mediapipe/framework/port:logging",
         "//mediapipe/framework/port:opencv_core",
-        "//mediapipe/framework/port:statusor",
         "@com_google_absl//absl/log:absl_check",
+        "@com_google_absl//absl/status:statusor",
     ],
 )
 
@@ -558,8 +559,8 @@ cc_test(
     deps = [
         ":image_frame_pool",
         "//mediapipe/framework/port:gtest_main",
-        "//mediapipe/framework/port:status",
         "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
     ],
 )
 
@@ -617,12 +618,11 @@ cc_library(
     deps = [
         "//mediapipe/framework:memory_manager",
         "//mediapipe/framework:port",
-        "//mediapipe/framework/deps:no_destructor",
         "//mediapipe/framework/port:aligned_malloc_and_free",
         "//mediapipe/framework/port:ret_check",
-        "//mediapipe/framework/port:status",
         "//mediapipe/gpu/webgpu:webgpu_check",
         "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/base:no_destructor",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/functional:any_invocable",
@@ -631,6 +631,8 @@ cc_library(
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_macros",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/synchronization",
@@ -686,7 +688,7 @@ cc_test(
     tags = [
         "angle",
         "not_run:arm",
-        "requires-gpu-nvidia",
+        "requires-gpu-sm90",
     ],
     deps = [
         ":tensor",
@@ -750,9 +752,9 @@ cc_library(
         ":tensor",
         "//mediapipe/framework/port:opencv_core",
         "//mediapipe/framework/port:ret_check",
-        "//mediapipe/framework/port:status",
         "@com_google_absl//absl/log:absl_check",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_macros",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
     ],
@@ -788,7 +790,6 @@ cc_test(
     deps = [
         ":tensor_ahwb_usage",
         "//mediapipe/framework/port:gtest_main",
-        "//mediapipe/framework/port:status",
     ],
 )
 

@@ -17,21 +17,23 @@ limitations under the License.
 
 #include <stddef.h>
 
+#include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
-#include <type_traits>
 
-#include "absl/algorithm/container.h"
-#include "absl/log/absl_log.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
-#include "absl/types/optional.h"
-#include "flatbuffers/flatbuffers.h"
-#include "mediapipe/framework/port/status_macros.h"
+#include "absl/algorithm/container.h"   // from @com_google_absl
+#include "absl/log/absl_log.h"          // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
+#include "absl/strings/str_cat.h"       // from @com_google_absl
+#include "absl/types/optional.h"        // from @com_google_absl
 #include "mediapipe/tasks/cc/common.h"
+#include "mediapipe/tasks/cc/core/model_resources.h"
 #include "mediapipe/tasks/cc/metadata/metadata_extractor.h"
-#include "tflite/schema/schema_generated.h"
+#include "mediapipe/tasks/metadata/metadata_schema_generated.h"
+#include "tflite/schema/schema_generated.h"  // from @litert
 
 namespace mediapipe {
 namespace tasks {

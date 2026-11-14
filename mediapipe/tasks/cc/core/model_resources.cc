@@ -20,14 +20,14 @@ limitations under the License.
 #include <string>
 #include <utility>
 
-#include "absl/memory/memory.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/match.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/string_view.h"
+#include "absl/memory/memory.h"         // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
+#include "absl/strings/match.h"         // from @com_google_absl
+#include "absl/strings/str_cat.h"       // from @com_google_absl
+#include "absl/strings/string_view.h"   // from @com_google_absl
 #include "mediapipe/framework/api2/packet.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/tasks/cc/common.h"
 #include "mediapipe/tasks/cc/core/external_file_handler.h"
 #include "mediapipe/tasks/cc/core/proto/external_file.pb.h"
@@ -35,10 +35,10 @@ limitations under the License.
 #include "mediapipe/util/resource_util.h"
 #include "mediapipe/util/resource_util_custom.h"
 #include "mediapipe/util/tflite/error_reporter.h"
-#include "tflite/core/api/error_reporter.h"
-#include "tflite/core/api/op_resolver.h"
-#include "tflite/model_builder.h"
-#include "tflite/tools/verifier.h"
+#include "tflite/core/api/error_reporter.h"  // from @litert
+#include "tflite/core/api/op_resolver.h"     // from @litert
+#include "tflite/model_builder.h"            // from @litert
+#include "tflite/tools/verifier.h"           // from @litert
 
 namespace mediapipe {
 namespace tasks {

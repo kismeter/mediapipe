@@ -20,9 +20,10 @@
 #include <utility>
 #include <vector>
 
-#include "absl/container/flat_hash_set.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include "absl/container/flat_hash_set.h"  // from @com_google_absl
+#include "absl/status/status.h"            // from @com_google_absl
+#include "absl/status/status_macros.h"     // from @com_google_absl
+#include "absl/status/statusor.h"          // from @com_google_absl
 #include "mediapipe/calculators/tensor/inference_calculator_utils.h"
 #include "mediapipe/calculators/tensor/inference_feedback_manager.h"
 #include "mediapipe/calculators/tensor/inference_io_mapper.h"
@@ -33,11 +34,10 @@
 #include "mediapipe/framework/formats/tensor.h"
 #include "mediapipe/framework/mediapipe_profiling.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status_macros.h"
-#include "tflite/c/c_api_types.h"
-#include "tflite/c/common.h"
-#include "tflite/interpreter_builder.h"
-#include "tflite/util.h"
+#include "tflite/c/c_api_types.h"        // from @litert
+#include "tflite/c/common.h"             // from @litert
+#include "tflite/interpreter_builder.h"  // from @litert
+#include "tflite/util.h"                 // from @litert
 
 namespace mediapipe {
 

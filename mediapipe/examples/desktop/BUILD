@@ -26,15 +26,16 @@ cc_library(
     srcs = ["simple_run_graph_main.cc"],
     deps = [
         "//mediapipe/framework:calculator_framework",
+        "//mediapipe/framework:output_stream_poller",
         "//mediapipe/framework/port:file_helpers",
         "//mediapipe/framework/port:map_util",
         "//mediapipe/framework/port:parse_text_proto",
         "//mediapipe/framework/port:ret_check",
-        "//mediapipe/framework/port:status",
-        "//mediapipe/framework/port:statusor",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/log:absl_log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_macros",
         "@com_google_absl//absl/strings",
     ],
 )
@@ -52,11 +53,12 @@ cc_library(
         "//mediapipe/framework/port:opencv_imgproc",
         "//mediapipe/framework/port:opencv_video",
         "//mediapipe/framework/port:parse_text_proto",
-        "//mediapipe/framework/port:status",
         "//mediapipe/util:resource_util",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/log:absl_log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_macros",
     ],
 )
 
@@ -77,7 +79,6 @@ cc_library(
         "//mediapipe/framework/port:opencv_imgproc",
         "//mediapipe/framework/port:opencv_video",
         "//mediapipe/framework/port:parse_text_proto",
-        "//mediapipe/framework/port:status",
         "//mediapipe/gpu:gl_calculator_helper",
         "//mediapipe/gpu:gpu_buffer",
         "//mediapipe/gpu:gpu_shared_data_internal",
@@ -85,5 +86,7 @@ cc_library(
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/log:absl_log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_macros",
     ],
 )

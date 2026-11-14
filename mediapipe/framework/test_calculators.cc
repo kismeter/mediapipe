@@ -20,17 +20,16 @@
 #include <string>
 #include <utility>
 
-#include "Eigen/Core"
-#include "absl/log/absl_check.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/string_view.h"
+#include "Eigen/Core"                  // from @eigen
+#include "absl/log/absl_check.h"       // from @com_google_absl
+#include "absl/status/status.h"        // from @com_google_absl
+#include "absl/strings/str_cat.h"      // from @com_google_absl
+#include "absl/strings/string_view.h"  // from @com_google_absl
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/deps/mathutil.h"
 #include "mediapipe/framework/formats/matrix.h"
 #include "mediapipe/framework/port/logging.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/framework/test_calculators.pb.h"
 
 namespace mediapipe {

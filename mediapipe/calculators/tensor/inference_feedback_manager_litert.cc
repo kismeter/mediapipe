@@ -5,16 +5,17 @@
 #include <utility>
 #include <vector>
 
-#include "absl/algorithm/container.h"
-#include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
-#include "absl/log/absl_log.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/str_format.h"
-#include "absl/strings/str_join.h"
-#include "absl/strings/string_view.h"
-#include "absl/types/span.h"
+#include "absl/algorithm/container.h"             // from @com_google_absl
+#include "absl/container/flat_hash_map.h"         // from @com_google_absl
+#include "absl/container/flat_hash_set.h"         // from @com_google_absl
+#include "absl/log/absl_log.h"                    // from @com_google_absl
+#include "absl/status/status.h"                   // from @com_google_absl
+#include "absl/status/status_macros.h"            // from @com_google_absl
+#include "absl/status/statusor.h"                 // from @com_google_absl
+#include "absl/strings/str_format.h"              // from @com_google_absl
+#include "absl/strings/str_join.h"                // from @com_google_absl
+#include "absl/strings/string_view.h"             // from @com_google_absl
+#include "absl/types/span.h"                      // from @com_google_absl
 #include "litert/c/litert_model_types.h"          // from @litert
 #include "litert/cc/litert_api_types.h"           // from @litert
 #include "litert/cc/litert_compiled_model.h"      // from @litert
@@ -25,7 +26,6 @@
 #include "mediapipe/calculators/tensor/inference_calculator.pb.h"
 #include "mediapipe/calculators/tensor/inference_io_mapper.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/util/tflite/tflite_signature_reader.h"
 
 namespace mediapipe {

@@ -19,8 +19,10 @@
 #include <utility>
 #include <vector>
 
-#include "absl/log/absl_log.h"
-#include "absl/status/status.h"
+#include "absl/log/absl_log.h"          // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
 #include "mediapipe/calculators/tensor/image_to_tensor_calculator.pb.h"
 #include "mediapipe/calculators/tensor/image_to_tensor_converter.h"
 #include "mediapipe/calculators/tensor/image_to_tensor_utils.h"
@@ -35,11 +37,7 @@
 #include "mediapipe/framework/memory_manager.h"
 #include "mediapipe/framework/memory_manager_service.h"
 #include "mediapipe/framework/port.h"
-#include "mediapipe/framework/port/canonical_errors.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status.h"
-#include "mediapipe/framework/port/status_macros.h"
-#include "mediapipe/framework/port/statusor.h"
 #include "mediapipe/gpu/gpu_origin.pb.h"
 #include "mediapipe/gpu/gpu_origin_utils.h"
 #include "mediapipe/gpu/webgpu/webgpu_check.h"
@@ -98,7 +96,6 @@ class ImageToTensorNodeImpl
     ABSL_RETURN_IF_ERROR([MPPMetalHelper updateContract:&cc.GetGenericContract()
                                    requestGpuAsOptional:true]);
 #else
-
     cc.UseService(kGpuService).Optional();
 #if MEDIAPIPE_USE_WEBGPU
     cc.UseService(kWebGpuService).Optional();
@@ -212,13 +209,16 @@ class ImageToTensorNodeImpl
                                         const Image& image) {
     // Lazy initialization of the GPU or CPU converter.
     if (image.UsesGpu()) {
+#if MEDIAPIPE_DISABLE_GPU
+      return absl::UnimplementedError(
+          "GPU processing is disabled in build flags");
+#else
       if (!params_.is_float_output) {
         return absl::UnimplementedError(
             "ImageToTensorConverter for the input GPU image currently doesn't "
             "support quantization.");
       }
       if (!gpu_converter_) {
-#if !MEDIAPIPE_DISABLE_GPU
 #if MEDIAPIPE_METAL_ENABLED
         ABSL_ASSIGN_OR_RETURN(
             gpu_converter_,
@@ -252,8 +252,8 @@ class ImageToTensorNodeImpl
               "ImageToTensorConverter for the input GPU image is unavailable.");
         }
 #endif  // MEDIAPIPE_METAL_ENABLED
-#endif  // !MEDIAPIPE_DISABLE_GPU
       }
+#endif  // MEDIAPIPE_DISABLE_GPU
     } else {
       if (!cpu_converter_) {
 #if !MEDIAPIPE_DISABLE_OPENCV

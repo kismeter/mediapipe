@@ -22,6 +22,7 @@ TEXT_EMBEDDER_DEPS = [
     "@com_google_absl//absl/log:absl_check",
     "@com_google_absl//absl/log:absl_log",
     "@com_google_absl//absl/status",
+    "@com_google_absl//absl/status:status_macros",
     "@com_google_absl//absl/status:statusor",
     "@com_google_absl//absl/strings",
     "//mediapipe/framework/port:status",
@@ -36,6 +37,19 @@ TEXT_EMBEDDER_DEPS = [
     "//mediapipe/tasks/cc/components/containers:embedding_result",
     "//mediapipe/tasks/cc/text/text_embedder",
 ]
+
+cc_library(
+    name = "text_embedder",
+    hdrs = ["text_embedder.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":text_embedder_c_lib",
+        "//mediapipe/tasks/c/components/containers:embedding_result",
+        "//mediapipe/tasks/c/components/processors:embedder_options",
+        "//mediapipe/tasks/c/core:base_options",
+        "//mediapipe/tasks/c/core:mp_status",
+    ],
+)
 
 cc_library(
     name = "text_embedder_lib",

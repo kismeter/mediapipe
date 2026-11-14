@@ -17,9 +17,12 @@
 #include <utility>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/time/time.h"
+#include "absl/log/absl_log.h"          // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
+#include "absl/time/time.h"             // from @com_google_absl
+#include "litert/cc/litert_options.h"   // from @litert
 #include "mediapipe/calculators/tensor/inference_calculator.h"
 #include "mediapipe/calculators/tensor/inference_runner.h"
 #include "mediapipe/calculators/tensor/inference_runner_litert.h"
@@ -31,7 +34,6 @@
 #include "mediapipe/framework/memory_manager_service.h"
 #include "mediapipe/framework/port.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/util/tflite/tflite_model_loader.h"
 
 #if !MEDIAPIPE_DISABLE_GPU
@@ -98,16 +100,25 @@ absl::Status InferenceCalculatorLiteRtImpl::UpdateContract(
 }
 
 absl::Status InferenceCalculatorLiteRtImpl::Open(CalculatorContext* cc) {
+  const auto& options = cc->Options<mediapipe::InferenceCalculatorOptions>();
   if (cc->Service(kMemoryManagerService).IsAvailable()) {
     memory_manager_ = &cc->Service(kMemoryManagerService).GetObject();
   }
 
 #if !MEDIAPIPE_DISABLE_GPU
-  if (UseGpu(cc->Options<mediapipe::InferenceCalculatorOptions>())) {
+  if (UseGpu(options)) {
     ABSL_RETURN_IF_ERROR(gpu_helper_.Open(cc));
   }
 #endif  // !MEDIAPIPE_DISABLE_GPU
 
+  // Builds without the hook that completes a deferred creation on the first
+  // packet (open source) cannot honor defer_runner_creation and create the
+  // runner here. Internal builds return above when the option is set.
+  if (options.delegate().litert().defer_runner_creation()) {
+    ABSL_LOG(WARNING) << "defer_runner_creation is not supported in this "
+                         "build. Creating the inference runner for "
+                      << cc->NodeName() << " in Open().";
+  }
   ABSL_ASSIGN_OR_RETURN(inference_runner_, CreateInferenceRunner(cc));
   return InferenceCalculatorNodeImpl::UpdateIoMapping(
       cc, inference_runner_->GetInputOutputTensorNames());
@@ -170,6 +181,8 @@ InferenceCalculatorLiteRtImpl::CreateInferenceRunner(CalculatorContext* cc) {
 #endif  // MEDIAPIPE_DISABLE_GPU
   };
 
+  std::optional<litert::Options> litert_options;
+
   return InferenceRunnerLiteRt::Create(
       std::move(model_packet), litert,
       options.has_input_output_config() ? &options.input_output_config()
@@ -181,7 +194,7 @@ InferenceCalculatorLiteRtImpl::CreateInferenceRunner(CalculatorContext* cc) {
 #if MEDIAPIPE_METAL_ENABLED
       metal_helper,
 #endif  // MEDIAPIPE_METAL_ENABLED
-      /*.litert_options=*/std::nullopt, system_handles);
+      std::move(litert_options), system_handles);
 }
 
 }  // namespace api2

@@ -46,6 +46,9 @@ class DecisionMaker private constructor(private var handle: Long) : Closeable, A
       question.threshold,
       question.temperature,
       question.normalizePrior,
+      question.positiveExamples.toTypedArray(),
+      question.negativeExamples.toTypedArray(),
+      question.inputPrompt.value,
     )
   }
 
@@ -61,6 +64,9 @@ class DecisionMaker private constructor(private var handle: Long) : Closeable, A
       question.instructions,
       question.scoringMode.value,
       question.normalizePrior,
+      question.examplesArray(),
+      question.inputPrompt.value,
+      question.balanceClassWeights,
     )
   }
 
@@ -95,6 +101,9 @@ class DecisionMaker private constructor(private var handle: Long) : Closeable, A
         question.threshold,
         question.temperature,
         question.normalizePrior,
+        question.positiveExamples.toTypedArray(),
+        question.negativeExamples.toTypedArray(),
+        question.inputPrompt.value,
       )
       .toList()
   }
@@ -120,6 +129,9 @@ class DecisionMaker private constructor(private var handle: Long) : Closeable, A
         question.instructions,
         question.scoringMode.value,
         question.normalizePrior,
+        question.examplesArray(),
+        question.inputPrompt.value,
+        question.balanceClassWeights,
       )
       .toList()
   }
@@ -172,6 +184,7 @@ class DecisionMaker private constructor(private var handle: Long) : Closeable, A
       context.imageBytes,
       context.audioSamples,
       context.audioSampleRate,
+      context.embedding,
       jsonQuestions,
     )
   }
@@ -187,6 +200,24 @@ class DecisionMaker private constructor(private var handle: Long) : Closeable, A
       question.instructions,
       question.scoringMode.value,
       question.normalizePrior,
+      question.examplesArray(),
+      question.inputPrompt.value,
+      question.balanceClassWeights,
+    )
+  }
+
+  /** Prewarms a [BooleanQuestion] (for example, fits its examples on embedding models). */
+  fun prewarm(question: BooleanQuestion) {
+    checkNotClosed()
+    nativePrewarmBoolean(
+      handle,
+      question.condition,
+      question.threshold,
+      question.temperature,
+      question.normalizePrior,
+      question.positiveExamples.toTypedArray(),
+      question.negativeExamples.toTypedArray(),
+      question.inputPrompt.value,
     )
   }
 
@@ -206,6 +237,10 @@ class DecisionMaker private constructor(private var handle: Long) : Closeable, A
     }
   }
 
+  /** Returns the examples as one array per choice, or null without examples. */
+  private fun ChoiceQuestion.examplesArray(): Array<Array<String>>? =
+    if (!hasExamples) null else examples.map { it.toTypedArray() }.toTypedArray()
+
   private fun checkNotClosed() {
     check(!closed.get() && handle != 0L) { "DecisionMaker instance has already been closed." }
   }
@@ -217,6 +252,9 @@ class DecisionMaker private constructor(private var handle: Long) : Closeable, A
     threshold: Float,
     temperature: Float,
     normalizePrior: Boolean,
+    positiveExamples: Array<String>,
+    negativeExamples: Array<String>,
+    inputPrompt: Int,
   ): BooleanResult
 
   private external fun nativeEvaluateChoice(
@@ -228,6 +266,9 @@ class DecisionMaker private constructor(private var handle: Long) : Closeable, A
     instructions: String,
     scoringMode: Int,
     normalizePrior: Boolean,
+    examples: Array<Array<String>>?,
+    inputPrompt: Int,
+    balanceClassWeights: Boolean,
   ): ChoiceResult
 
   private external fun nativeEvaluateScore(
@@ -246,6 +287,9 @@ class DecisionMaker private constructor(private var handle: Long) : Closeable, A
     threshold: Float,
     temperature: Float,
     normalizePrior: Boolean,
+    positiveExamples: Array<String>,
+    negativeExamples: Array<String>,
+    inputPrompt: Int,
   ): Array<BooleanResult>
 
   private external fun nativeEvaluateChoiceBatch(
@@ -258,6 +302,9 @@ class DecisionMaker private constructor(private var handle: Long) : Closeable, A
     instructions: String,
     scoringMode: Int,
     normalizePrior: Boolean,
+    examples: Array<Array<String>>?,
+    inputPrompt: Int,
+    balanceClassWeights: Boolean,
   ): Array<ChoiceResult>
 
   private external fun nativeEvaluateScoreBatch(
@@ -281,6 +328,7 @@ class DecisionMaker private constructor(private var handle: Long) : Closeable, A
     imageBytes: ByteArray?,
     audioSamples: FloatArray?,
     audioSampleRate: Int,
+    embedding: FloatArray?,
     jsonQuestions: String,
   ): String
 
@@ -292,6 +340,20 @@ class DecisionMaker private constructor(private var handle: Long) : Closeable, A
     instructions: String,
     scoringMode: Int,
     normalizePrior: Boolean,
+    examples: Array<Array<String>>?,
+    inputPrompt: Int,
+    balanceClassWeights: Boolean,
+  )
+
+  private external fun nativePrewarmBoolean(
+    handle: Long,
+    condition: String,
+    threshold: Float,
+    temperature: Float,
+    normalizePrior: Boolean,
+    positiveExamples: Array<String>,
+    negativeExamples: Array<String>,
+    inputPrompt: Int,
   )
 
   private external fun nativePrewarmJson(handle: Long, jsonSchema: String)
@@ -360,6 +422,7 @@ class DecisionMaker private constructor(private var handle: Long) : Closeable, A
         }
       }
 
+      val npuDispatchDir = context.applicationInfo?.nativeLibraryDir.orEmpty()
       val handle =
         nativeCreateHandle(
           fd,
@@ -367,6 +430,7 @@ class DecisionMaker private constructor(private var handle: Long) : Closeable, A
           options.modelAssetBuffer,
           options.maxNumTokens,
           options.delegate.value,
+          npuDispatchDir,
           appId,
           appVersion,
           BaseOptionsUtils.HOST_ENVIRONMENT_ANDROID,
@@ -382,6 +446,7 @@ class DecisionMaker private constructor(private var handle: Long) : Closeable, A
       modelBuffer: ByteBuffer?,
       maxNumTokens: Int,
       delegate: Int,
+      npuDispatchLibraryDir: String,
       appId: String,
       appVersion: String,
       hostEnvironment: Int,

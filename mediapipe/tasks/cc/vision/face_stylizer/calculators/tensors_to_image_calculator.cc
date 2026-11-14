@@ -12,29 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "absl/log/absl_check.h"
-#include "absl/status/status.h"
-#include "absl/strings/str_cat.h"
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"       // from @com_google_absl
+#include "absl/strings/substitute.h"    // from @com_google_absl
 #include "mediapipe/calculators/tensor/image_to_tensor_utils.h"
 #include "mediapipe/framework/api2/node.h"
-#include "mediapipe/framework/api2/packet.h"
 #include "mediapipe/framework/api2/port.h"
 #include "mediapipe/framework/calculator_framework.h"
-#include "mediapipe/framework/calculator_options.pb.h"
 #include "mediapipe/framework/formats/image.h"
+#include "mediapipe/framework/formats/image_format.pb.h"
+#include "mediapipe/framework/formats/image_frame.h"
 #include "mediapipe/framework/formats/image_frame_opencv.h"
 #include "mediapipe/framework/formats/tensor.h"
 #include "mediapipe/framework/port/logging.h"
 #include "mediapipe/framework/port/opencv_core_inc.h"
-#include "mediapipe/framework/port/opencv_imgproc_inc.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/gpu/gpu_origin.pb.h"
 #include "mediapipe/gpu/gpu_service.h"
 #include "mediapipe/tasks/cc/vision/face_stylizer/calculators/tensors_to_image_calculator.pb.h"
@@ -53,12 +52,12 @@
 #include "mediapipe/gpu/gl_quad_renderer.h"
 #include "mediapipe/gpu/gl_simple_shaders.h"
 #if MEDIAPIPE_OPENGL_ES_VERSION >= MEDIAPIPE_OPENGL_ES_31
-#include "tflite/delegates/gpu/common/util.h"
-#include "tflite/delegates/gpu/gl/converters/util.h"
-#include "tflite/delegates/gpu/gl/gl_program.h"
-#include "tflite/delegates/gpu/gl/gl_shader.h"
-#include "tflite/delegates/gpu/gl/gl_texture.h"
-#include "tflite/delegates/gpu/gl_delegate.h"
+#include "tflite/delegates/gpu/common/util.h"         // from @litert
+#include "tflite/delegates/gpu/gl/converters/util.h"  // from @litert
+#include "tflite/delegates/gpu/gl/gl_program.h"       // from @litert
+#include "tflite/delegates/gpu/gl/gl_shader.h"        // from @litert
+#include "tflite/delegates/gpu/gl/gl_texture.h"       // from @litert
+#include "tflite/delegates/gpu/gl_delegate.h"         // from @litert
 #endif  // MEDIAPIPE_OPENGL_ES_VERSION >= MEDIAPIPE_OPENGL_ES_31
 #endif  // MEDIAPIPE_METAL_ENABLED
 #endif  // !MEDIAPIPE_DISABLE_GPU
@@ -377,7 +376,7 @@ absl::Status TensorsToImageCalculator::MetalSetup(CalculatorContext* cc) {
   RET_CHECK(to_buffer_program_ != nil) << "Couldn't create pipeline state " <<
       [[error localizedDescription] UTF8String];
 
-  return mediapipe::OkStatus();
+  return absl::OkStatus();
 }
 
 #endif  // MEDIAPIPE_METAL_ENABLED
@@ -476,7 +475,7 @@ absl::Status TensorsToImageCalculator::GlSetup(CalculatorContext* cc) {
 
 #endif  // MEDIAPIPE_OPENGL_ES_VERSION >= MEDIAPIPE_OPENGL_ES_31
 
-  return mediapipe::OkStatus();
+  return absl::OkStatus();
 }
 
 absl::Status TensorsToImageCalculator::GlProcess(CalculatorContext* cc) {
@@ -562,7 +561,7 @@ absl::Status TensorsToImageCalculator::GlProcess(CalculatorContext* cc) {
 
 #endif  // MEDIAPIPE_OPENGL_ES_VERSION >= MEDIAPIPE_OPENGL_ES_31
 
-    return mediapipe::OkStatus();
+    return absl::OkStatus();
   });
 }
 

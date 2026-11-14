@@ -19,14 +19,14 @@
 #include <cstdint>
 #include <vector>
 
-#include "absl/log/absl_check.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
+#include "absl/log/absl_check.h"        // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
+#include "absl/strings/str_cat.h"       // from @com_google_absl
 #include "mediapipe/framework/formats/tensor.h"
 #include "mediapipe/framework/port/opencv_core_inc.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status_macros.h"
 
 namespace mediapipe::formats {
 namespace {
@@ -34,6 +34,8 @@ namespace {
 // Maps the Tensor element type to OpenCV Mat type.
 absl::StatusOr<int> GetMatType(Tensor::ElementType element_type, int channels) {
   switch (element_type) {
+    case Tensor::ElementType::kFloat16:
+      return CV_16FC(channels);
     case Tensor::ElementType::kFloat32:
       return CV_32FC(channels);
     case Tensor::ElementType::kUInt8:

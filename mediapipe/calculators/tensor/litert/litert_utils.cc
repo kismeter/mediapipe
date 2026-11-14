@@ -15,23 +15,30 @@
 #include "mediapipe/calculators/tensor/litert/litert_utils.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <string>
 #include <utility>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/str_format.h"
-#include "absl/strings/str_join.h"
-#include "absl/strings/string_view.h"
-#include "absl/types/span.h"
+#include "absl/algorithm/container.h"              // from @com_google_absl
+#include "absl/status/status.h"                    // from @com_google_absl
+#include "absl/status/statusor.h"                  // from @com_google_absl
+#include "absl/strings/str_cat.h"                  // from @com_google_absl
+#include "absl/strings/str_format.h"               // from @com_google_absl
+#include "absl/strings/str_join.h"                 // from @com_google_absl
+#include "absl/strings/string_view.h"              // from @com_google_absl
+#include "absl/types/span.h"                       // from @com_google_absl
+#include "litert/cc/litert_api_types.h"            // from @litert
 #include "litert/cc/litert_element_type.h"         // from @litert
 #include "litert/cc/litert_environment.h"          // from @litert
 #include "litert/cc/litert_environment_options.h"  // from @litert
+#include "litert/cc/litert_layout.h"               // from @litert
 #include "litert/cc/litert_macros.h"               // from @litert
+#include "litert/cc/litert_model_types.h"          // from @litert
 #include "litert/cc/litert_ranked_tensor_type.h"   // from @litert
 #include "litert/cc/litert_tensor_buffer.h"        // from @litert
+#include "litert/cc/litert_tensor_buffer_types.h"  // from @litert
 #include "mediapipe/calculators/tensor/litert/litert_service.h"
 #include "mediapipe/framework/formats/tensor.h"
 #include "mediapipe/framework/memory_manager.h"
@@ -205,9 +212,33 @@ absl::Status AreTensorSpecsCompatible(
   return absl::OkStatus();
 }
 
+absl::StatusOr<bool> HasDynamicDimension(
+    const litert::SimpleSignature& signature, bool enable_dynamic_resize) {
+  if (enable_dynamic_resize) {
+    const size_t num_inputs = signature.InputNames().size();
+    for (size_t i = 0; i < num_inputs; ++i) {
+      LITERT_ASSIGN_OR_RETURN(const litert::RankedTensorType input_type,
+                              signature.InputTensorType(i));
+      if (absl::c_linear_search(input_type.Layout().Dimensions(), -1)) {
+        return true;
+      }
+    }
+  }
+  const size_t num_outputs = signature.OutputNames().size();
+  for (size_t i = 0; i < num_outputs; ++i) {
+    LITERT_ASSIGN_OR_RETURN(const litert::RankedTensorType output_type,
+                            signature.OutputTensorType(i));
+    if (output_type.Layout().Rank() == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 absl::StatusOr<Tensor> CreateTensorFromLiteRtRankedTensorType(
     const litert::RankedTensorType& litert_tensor_type,
-    MemoryManager* memory_manager, int memory_allignment) {
+    MemoryManager* memory_manager, int memory_allignment,
+    const Tensor::QuantizationParameters& quantization_parameters) {
   const auto tensor_type = litert_tensor_type.ElementType();
   const auto tensor_dimensions = litert_tensor_type.Layout().Dimensions();
   // Scalar input in TensorFlow is described by an empty shape.
@@ -219,36 +250,46 @@ absl::StatusOr<Tensor> CreateTensorFromLiteRtRankedTensorType(
   switch (tensor_type) {
     case litert::ElementType::Float16:
       return Tensor(Tensor::ElementType::kFloat16,
-                    Tensor::Shape(tensor_shape_vector), memory_manager,
-                    memory_allignment);
+                    Tensor::Shape(tensor_shape_vector), quantization_parameters,
+                    memory_manager, memory_allignment);
     case litert::ElementType::Float32:
       return Tensor(Tensor::ElementType::kFloat32,
-                    Tensor::Shape(tensor_shape_vector), memory_manager,
-                    memory_allignment);
+                    Tensor::Shape(tensor_shape_vector), quantization_parameters,
+                    memory_manager, memory_allignment);
     case litert::ElementType::UInt8:
       return Tensor(Tensor::ElementType::kUInt8,
-                    Tensor::Shape(tensor_shape_vector), memory_manager,
-                    memory_allignment);
+                    Tensor::Shape(tensor_shape_vector), quantization_parameters,
+                    memory_manager, memory_allignment);
     case litert::ElementType::Int8:
       return Tensor(Tensor::ElementType::kInt8,
-                    Tensor::Shape(tensor_shape_vector), memory_manager,
-                    memory_allignment);
+                    Tensor::Shape(tensor_shape_vector), quantization_parameters,
+                    memory_manager, memory_allignment);
     case litert::ElementType::Int32:
       return Tensor(Tensor::ElementType::kInt32,
-                    Tensor::Shape(tensor_shape_vector), memory_manager,
-                    memory_allignment);
+                    Tensor::Shape(tensor_shape_vector), quantization_parameters,
+                    memory_manager, memory_allignment);
     case litert::ElementType::Int64:
       return Tensor(Tensor::ElementType::kInt64,
-                    Tensor::Shape(tensor_shape_vector), memory_manager,
-                    memory_allignment);
+                    Tensor::Shape(tensor_shape_vector), quantization_parameters,
+                    memory_manager, memory_allignment);
     case litert::ElementType::Bool:
       return Tensor(Tensor::ElementType::kBool,
-                    Tensor::Shape(tensor_shape_vector), memory_manager,
-                    memory_allignment);
+                    Tensor::Shape(tensor_shape_vector), quantization_parameters,
+                    memory_manager, memory_allignment);
     default:
       break;
   }
   return absl::InvalidArgumentError("Unsupported tensor type.");
+}
+
+Tensor::QuantizationParameters GetMpQuantizationParameters(
+    const litert::SimpleTensor& litert_tensor) {
+  if (litert_tensor.QTypeId() != litert::QuantizationTypeId::PerTensor) {
+    return Tensor::QuantizationParameters{};
+  }
+  const litert::QuantizationPerTensor q = litert_tensor.PerTensorQuantization();
+  return Tensor::QuantizationParameters{q.scale,
+                                        static_cast<int>(q.zero_point)};
 }
 
 absl::Status CopyMpTensorToLiteRtBuffer(const Tensor& mp_tensor,
@@ -285,6 +326,54 @@ absl::Status CopyLiteRtBufferToMpTensor(
   void* mp_tensor_data = mp_tensor_view.buffer<void>();
   std::memcpy(mp_tensor_data, lock_and_addr.second, tensor_size_bytes);
   return absl::OkStatus();
+}
+
+absl::StatusOr<litert::TensorBuffer> CreateStringInputTensorBuffer(
+    const litert::Environment& environment,
+    const litert::RankedTensorType& model_tensor_type,
+    const Tensor& mp_tensor) {
+  RET_CHECK(model_tensor_type.ElementType() == litert::ElementType::TfString)
+          .SetCode(absl::StatusCode::kInvalidArgument)
+      << "LiteRt input tensor type is not TfString.";
+  RET_CHECK(mp_tensor.element_type() == Tensor::ElementType::kChar)
+          .SetCode(absl::StatusCode::kInvalidArgument)
+      << "LiteRt input tensor type is TfString while MediaPipe tensor type is "
+         "not kChar.";
+  std::string str;
+  if (mp_tensor.bytes() > 0) {
+    auto read_view = mp_tensor.GetCpuReadView();
+    const char* buffer = read_view.buffer<char>();
+    RET_CHECK(buffer) << "Char-typed input tensor buffer is null.";
+    str.assign(buffer, mp_tensor.shape().num_elements());
+  }
+  // The buffer holds exactly one string. Use the model's layout unless it is
+  // dynamic, in which case use [1].
+  const absl::Span<const int> model_dims =
+      model_tensor_type.Layout().Dimensions();
+  const litert::RankedTensorType tensor_type =
+      absl::c_linear_search(model_dims, -1)
+          ? litert::RankedTensorType(litert::ElementType::TfString,
+                                     litert::Layout(litert::Dimensions({1})))
+          : model_tensor_type;
+  // TFLite string tensor layout for one string: int32 string count, int32
+  // offsets of the string start and end, then the string bytes. Written here
+  // rather than through litert::util::CreateTensorBufferFromStrings, whose
+  // target links the static LiteRT runtime (litert_environment) that
+  // litert_utils users built against litert_environment_api must not depend on.
+  constexpr int32_t kHeaderSize = 3 * sizeof(int32_t);
+  const int32_t header[3] = {1, kHeaderSize,
+                             kHeaderSize + static_cast<int32_t>(str.size())};
+  std::vector<uint8_t> serialized(kHeaderSize + str.size());
+  std::memcpy(serialized.data(), header, kHeaderSize);
+  std::memcpy(serialized.data() + kHeaderSize, str.data(), str.size());
+  LITERT_ASSIGN_OR_RETURN(
+      litert::TensorBuffer buffer,
+      litert::TensorBuffer::CreateManaged(environment,
+                                          litert::TensorBufferType::kHostMemory,
+                                          tensor_type, serialized.size()));
+  LITERT_RETURN_IF_ERROR(
+      buffer.Write<uint8_t>(litert::Span<const uint8_t>(serialized)));
+  return buffer;
 }
 
 absl::StatusOr<litert::Environment> CreateLiteRtEnvironment(

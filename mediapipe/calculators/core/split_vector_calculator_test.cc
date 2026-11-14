@@ -19,7 +19,7 @@
 #include <utility>
 #include <vector>
 
-#include "absl/memory/memory.h"
+#include "absl/memory/memory.h"  // from @com_google_absl
 #include "mediapipe/calculators/core/split_vector_calculator.pb.h"
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/calculator_runner.h"
@@ -29,7 +29,7 @@
 #include "mediapipe/framework/port/parse_text_proto.h"
 #include "mediapipe/framework/port/status_matchers.h"  // NOLINT
 #include "mediapipe/framework/tool/validate_type.h"
-#include "tflite/interpreter.h"
+#include "tflite/interpreter.h"  // from @litert
 
 namespace mediapipe {
 
@@ -41,7 +41,7 @@ const int channels = 1;
 
 class SplitTfLiteTensorVectorCalculatorTest : public ::testing::Test {
  protected:
-  void TearDown() {
+  void TearDown() override {
     // Note: Since the pointers contained in this vector will be cleaned up by
     // the interpreter, only ensure that the vector is cleaned up for the next
     // test.

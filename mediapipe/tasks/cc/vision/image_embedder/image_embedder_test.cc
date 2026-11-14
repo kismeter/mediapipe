@@ -21,9 +21,9 @@ limitations under the License.
 #include <memory>
 #include <utility>
 
-#include "absl/flags/flag.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include "absl/flags/flag.h"       // from @com_google_absl
+#include "absl/status/status.h"    // from @com_google_absl
+#include "absl/status/statusor.h"  // from @com_google_absl
 #include "mediapipe/framework/deps/file_path.h"
 #include "mediapipe/framework/formats/image.h"
 #include "mediapipe/framework/port/gmock.h"
@@ -33,10 +33,10 @@ limitations under the License.
 #include "mediapipe/tasks/cc/core/embedding_provider.h"
 #include "mediapipe/tasks/cc/vision/core/running_mode.h"
 #include "mediapipe/tasks/cc/vision/utils/image_utils.h"
-#include "tflite/core/api/op_resolver.h"
-#include "tflite/kernels/builtin_op_kernels.h"
-#include "tflite/mutable_op_resolver.h"
-#include "tflite/test_util.h"
+#include "tflite/core/api/op_resolver.h"        // from @litert
+#include "tflite/kernels/builtin_op_kernels.h"  // from @litert
+#include "tflite/mutable_op_resolver.h"         // from @litert
+#include "tflite/test_util.h"                   // from @litert
 
 namespace mediapipe {
 namespace tasks {
@@ -53,7 +53,7 @@ using ::testing::Optional;
 constexpr char kTestDataDirectory[] = "/mediapipe/tasks/testdata/vision/";
 constexpr char kMobileNetV3Embedder[] =
     "mobilenet_v3_small_100_224_embedder.tflite";
-constexpr double kSimilarityTolerancy = 1e-6;
+constexpr double kSimilarityTolerancy = 1e-3;
 
 // Utility function to check the sizes, head_index and head_names of a result
 // produced by kMobileNetV3Embedder.

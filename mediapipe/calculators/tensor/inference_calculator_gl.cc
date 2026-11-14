@@ -18,11 +18,12 @@
 #include <utility>
 #include <vector>
 
-#include "absl/memory/memory.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/str_format.h"
-#include "absl/time/time.h"
+#include "absl/memory/memory.h"         // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
+#include "absl/strings/str_format.h"    // from @com_google_absl
+#include "absl/time/time.h"             // from @com_google_absl
 #include "mediapipe/calculators/tensor/inference_calculator.h"
 #include "mediapipe/calculators/tensor/inference_calculator.pb.h"
 #include "mediapipe/calculators/tensor/inference_io_mapper.h"
@@ -33,14 +34,13 @@
 #include "mediapipe/framework/formats/tensor.h"
 #include "mediapipe/framework/mediapipe_profiling.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/gpu/gl_base.h"
 #include "mediapipe/gpu/gl_calculator_helper.h"
 #include "mediapipe/gpu/gl_context.h"
 #include "mediapipe/util/tflite/tflite_model_loader.h"
-#include "tflite/core/interpreter_builder.h"
-#include "tflite/delegates/gpu/gl_delegate.h"
-#include "tflite/interpreter.h"
+#include "tflite/core/interpreter_builder.h"   // from @litert
+#include "tflite/delegates/gpu/gl_delegate.h"  // from @litert
+#include "tflite/interpreter.h"                // from @litert
 
 namespace mediapipe {
 namespace api2 {
@@ -87,15 +87,17 @@ class InferenceCalculatorGlImpl
      public:
       explicit ReadWriteGlBuffer(std::vector<int> dims)
           : tensor_(Tensor::ElementType::kFloat32,
-                    Tensor::Shape{std::move(dims)}),
-            // Getting the write view and destroying it immediately
-            // intentionally - the underlying GL buffer will be reused across
-            // multiple runs in multiple read/write manner directly - not
-            // through Tensor, so synchronization provided by Tensor is not
-            // required.
-            // NOTE: tensor is an implementation detail here which is used as a
-            // convenient method to create GlBuffer.
-            name_(tensor_.GetOpenGlBufferWriteView().name()) {}
+                    Tensor::Shape{std::move(dims)}) {
+        // Getting the write view and destroying it immediately
+        // intentionally - the underlying GL buffer will be reused across
+        // multiple runs in multiple read/write manner directly - not
+        // through Tensor, so synchronization provided by Tensor is not
+        // required.
+        // NOTE: tensor is an implementation detail here which is used as a
+        // convenient method to create GlBuffer.
+        auto write_view = tensor_.GetOpenGlBufferWriteView();
+        name_ = write_view.name();
+      }
 
       ReadWriteGlBuffer(const ReadWriteGlBuffer&) = delete;
       ReadWriteGlBuffer& operator=(const ReadWriteGlBuffer&) = delete;

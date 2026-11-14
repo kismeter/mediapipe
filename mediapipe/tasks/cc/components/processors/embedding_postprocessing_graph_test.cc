@@ -17,9 +17,11 @@ limitations under the License.
 
 #include <memory>
 
-#include "absl/flags/flag.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
+#include "absl/flags/flag.h"            // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/status/statusor.h"       // from @com_google_absl
+#include "absl/strings/string_view.h"   // from @com_google_absl
 #include "mediapipe/framework/api2/builder.h"
 #include "mediapipe/framework/api2/port.h"
 #include "mediapipe/framework/calculator_framework.h"
@@ -39,7 +41,7 @@ limitations under the License.
 #include "mediapipe/tasks/cc/components/processors/proto/embedding_postprocessing_graph_options.pb.h"
 #include "mediapipe/tasks/cc/core/model_resources.h"
 #include "mediapipe/tasks/cc/core/proto/external_file.pb.h"
-#include "tflite/test_util.h"
+#include "tflite/test_util.h"  // from @litert
 
 namespace mediapipe {
 namespace tasks {

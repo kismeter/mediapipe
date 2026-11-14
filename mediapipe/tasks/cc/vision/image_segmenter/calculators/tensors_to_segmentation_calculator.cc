@@ -24,19 +24,20 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/strings/str_cat.h"
-#include "absl/types/span.h"
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"       // from @com_google_absl
+#include "absl/types/span.h"            // from @com_google_absl
 #include "mediapipe/framework/api3/calculator.h"
 #include "mediapipe/framework/api3/calculator_context.h"
 #include "mediapipe/framework/api3/calculator_contract.h"
+#include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/formats/image.h"
 #include "mediapipe/framework/formats/image_frame.h"
 #include "mediapipe/framework/formats/image_frame_opencv.h"
 #include "mediapipe/framework/formats/tensor.h"
 #include "mediapipe/framework/port/opencv_imgproc_inc.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/tasks/cc/vision/image_segmenter/calculators/tensors_to_segmentation_calculator.pb.h"
 #include "mediapipe/tasks/cc/vision/image_segmenter/proto/segmenter_options.pb.h"
 #include "mediapipe/tasks/cc/vision/utils/image_utils.h"

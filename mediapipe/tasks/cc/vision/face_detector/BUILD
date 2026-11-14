@@ -24,6 +24,7 @@ cc_library(
     srcs = ["face_detector_graph.cc"],
     deps = [
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_macros",
         "@com_google_absl//absl/status:statusor",
         "//mediapipe/calculators/core:clip_vector_size_calculator",
         "//mediapipe/calculators/core:clip_vector_size_calculator_cc_proto",
@@ -53,11 +54,9 @@ cc_library(
         "//mediapipe/framework/formats:rect_cc_proto",
         "//mediapipe/framework/formats:tensor",
         "//mediapipe/framework/port:ret_check",
-        "//mediapipe/framework/port:status",
         "//mediapipe/tasks/cc/components/processors:image_preprocessing_graph",
         "//mediapipe/tasks/cc/core:model_resources",
         "//mediapipe/tasks/cc/core:model_task_graph",
-        "//mediapipe/tasks/cc/core/proto:inference_subgraph_cc_proto",
         "//mediapipe/tasks/cc/metadata:metadata_extractor",
         "//mediapipe/tasks/cc/vision/face_detector/proto:face_detector_graph_options_cc_proto",
         "//mediapipe/tasks/cc/vision/utils:image_tensor_specs",
@@ -84,6 +83,7 @@ cc_library(
         "//mediapipe/tasks/cc/vision/core:vision_task_api_factory",
         "//mediapipe/tasks/cc/vision/face_detector/proto:face_detector_graph_options_cc_proto",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_macros",
         "@com_google_absl//absl/status:statusor",
     ],
 )

@@ -23,8 +23,9 @@
 #include <type_traits>
 #include <utility>
 
-#include "absl/status/status.h"
-#include "absl/strings/str_cat.h"
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"       // from @com_google_absl
 #include "mediapipe/framework/calculator.pb.h"
 #include "mediapipe/framework/camera_intrinsics.h"
 #include "mediapipe/framework/formats/image.h"
@@ -37,7 +38,6 @@
 #include "mediapipe/framework/port/core_proto_inc.h"
 #include "mediapipe/framework/port/logging.h"
 #include "mediapipe/framework/port/ret_check.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/java/com/google/mediapipe/framework/jni/colorspace.h"
 #include "mediapipe/java/com/google/mediapipe/framework/jni/graph.h"
 #include "mediapipe/java/com/google/mediapipe/framework/jni/jni_util.h"
@@ -510,7 +510,7 @@ JNIEXPORT jlong JNICALL PACKET_CREATOR_METHOD(nativeCreateFloat32Array)(
   // float. C++ makes no guarantees about the size of floating point types, and
   // some exotic architectures don't even have 32-bit floats (or even binary
   // floats), but on all architectures we care about this is a float.
-  static_assert(std::is_same<float, jfloat>::value, "jfloat must be float");
+  static_assert(std::is_same_v<float, jfloat>, "jfloat must be float");
   std::memcpy(floats, data_ref, count * sizeof(float));
   env->ReleaseFloatArrayElements(data, data_ref, JNI_ABORT);
 
@@ -529,7 +529,7 @@ JNIEXPORT jlong JNICALL PACKET_CREATOR_METHOD(nativeCreateFloat32Vector)(
   // float. C++ makes no guarantees about the size of floating point types, and
   // some exotic architectures don't even have 32-bit floats (or even binary
   // floats), but on all architectures we care about this is a float.
-  static_assert(std::is_same<float, jfloat>::value, "jfloat must be float");
+  static_assert(std::is_same_v<float, jfloat>, "jfloat must be float");
   std::unique_ptr<std::vector<float>> floats =
       std::make_unique<std::vector<float>>(data_ref, data_ref + count);
 
@@ -543,7 +543,7 @@ JNIEXPORT jlong JNICALL PACKET_CREATOR_METHOD(nativeCreateInt32Array)(
   jsize count = env->GetArrayLength(data);
   jint* data_ref = env->GetIntArrayElements(data, nullptr);
   int32_t* ints = new int32_t[count];
-  static_assert(std::is_same<int32_t, jint>::value, "jint must be int32_t");
+  static_assert(std::is_same_v<int32_t, jint>, "jint must be int32_t");
   std::memcpy(ints, data_ref, count * sizeof(int32_t));
   env->ReleaseIntArrayElements(data, data_ref, JNI_ABORT);
 
@@ -556,7 +556,7 @@ JNIEXPORT jlong JNICALL PACKET_CREATOR_METHOD(nativeCreateInt32Array)(
 
 JNIEXPORT jlong JNICALL PACKET_CREATOR_METHOD(nativeCreateInt32Pair)(
     JNIEnv* env, jobject thiz, jlong context, jint first, jint second) {
-  static_assert(std::is_same<int32_t, jint>::value, "jint must be int32_t");
+  static_assert(std::is_same_v<int32_t, jint>, "jint must be int32_t");
 
   mediapipe::Packet packet = mediapipe::MakePacket<std::pair<int32_t, int32_t>>(
       std::make_pair(first, second));

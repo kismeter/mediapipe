@@ -17,6 +17,8 @@ limitations under the License.
 
 #include <utility>
 
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
 #include "mediapipe/framework/api2/builder.h"
 #include "mediapipe/framework/formats/detection.pb.h"
 #include "mediapipe/tasks/cc/components/containers/detection_result.h"
@@ -145,6 +147,8 @@ absl::StatusOr<std::unique_ptr<FaceDetector>> FaceDetector::Create(
        .host_environment = options->base_options.host_environment,
        .host_system = options->base_options.host_system,
        .host_version = options->base_options.host_version,
+       .app_id = options->base_options.app_id,
+       .app_version = options->base_options.app_version,
        .ca_bundle_path = options->base_options.ca_bundle_path});
 }
 

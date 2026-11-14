@@ -23,8 +23,10 @@
 #include <utility>
 #include <vector>
 
-#include "absl/memory/memory.h"
-#include "absl/strings/str_cat.h"
+#include "absl/memory/memory.h"         // from @com_google_absl
+#include "absl/status/status.h"         // from @com_google_absl
+#include "absl/status/status_macros.h"  // from @com_google_absl
+#include "absl/strings/str_cat.h"       // from @com_google_absl
 #include "mediapipe/framework/graph_service_manager.h"
 #include "mediapipe/framework/packet_generator.pb.h"
 #include "mediapipe/framework/port.h"
@@ -33,7 +35,6 @@
 #include "mediapipe/framework/port/map_util.h"
 #include "mediapipe/framework/port/ret_check.h"
 #include "mediapipe/framework/port/status_builder.h"
-#include "mediapipe/framework/port/status_macros.h"
 #include "mediapipe/framework/status_handler.pb.h"
 #include "mediapipe/framework/subgraph.h"
 #include "mediapipe/framework/tool/name_util.h"

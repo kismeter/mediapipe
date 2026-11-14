@@ -3,9 +3,13 @@ VERS_1.0 {
     MpErrorFree;
     MpFlatbuffer*;
     MpLanguageDetector*;
+    MpRemoveLoggingCallback;
+    MpSetLoggingCallback;
     MpStringList*;
     MpTextClassifier*;
     MpTextEmbedder*;
+    MpTextProofreader*;
+    MpTextSummarizer*;
   local:
     *;
 };

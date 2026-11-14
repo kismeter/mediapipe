@@ -17,6 +17,27 @@
 import {TaskRunnerOptions} from '../../../../tasks/web/core/task_runner_options';
 
 /**
+ * Multimodal decision input combining text, encoded image bytes, and/or
+ * 16kHz mono PCM audio samples.
+ */
+export declare interface DecisionContextInput {
+  /** Optional text context or query description. */
+  text?: string;
+  /** Optional raw encoded image bytes (PNG, JPEG, WebP, or TGA). */
+  imageBytes?: Uint8Array;
+  /** Optional mono 16kHz PCM audio samples in [-1.0, 1.0]. */
+  audioSamples?: Float32Array;
+}
+
+/**
+ * How examples and inputs are embedded, for questions with examples (ignored
+ * otherwise). `'CLASSIFICATION'` (the default) embeds
+ * `task: classification | query: <text>` and suits sentences; `'NONE'` embeds
+ * the raw text and suits single words and short phrases.
+ */
+export type InputPrompt = 'CLASSIFICATION' | 'NONE';
+
+/**
  * A single candidate option for binary, categorical, or ordinal questions.
  */
 export declare interface ClassifierOption {
@@ -24,6 +45,16 @@ export declare interface ClassifierOption {
   label: string;
   /** Optional natural language description of the option criteria. */
   description?: string;
+  /** Optional encoded image bytes (PNG, JPEG, WebP, or TGA) for multimodal options. */
+  imageBytes?: Uint8Array;
+  /** Optional mono 16kHz PCM audio samples in [-1.0, 1.0] for multimodal options. */
+  audioSamples?: Float32Array;
+  /**
+   * Optional example inputs that belong to this option (choice questions with
+   * an embedding model). If any option has examples, every option needs at
+   * least one.
+   */
+  examples?: string[];
 }
 
 /**
@@ -58,6 +89,19 @@ export declare interface ClassifierQuestion {
   temperature?: number;
   /** Whether to normalize against the empty-context ("[None]") prior. */
   normalizePrior?: boolean;
+  /**
+   * Example inputs for which a binary question is true / false. With both,
+   * embedding models fit a classifier on them and `prompt` may be empty.
+   */
+  positiveExamples?: string[];
+  negativeExamples?: string[];
+  /** How examples and inputs are embedded. Only used with examples. */
+  inputPrompt?: InputPrompt;
+  /**
+   * With option examples, weights each option by N / (K * N_c), so that
+   * options with fewer examples aren't penalized. Defaults to true.
+   */
+  balanceClassWeights?: boolean;
 }
 
 /**
@@ -86,6 +130,10 @@ export declare interface ClassifierSchema {
 export declare interface ClassifierEvaluateOptions {
   /** Optional per-call context prepended to the input text. */
   context?: string;
+  /** Optional raw encoded image bytes (PNG, JPEG, WebP, or TGA) for multimodal decisions. */
+  imageBytes?: Uint8Array;
+  /** Optional mono 16kHz PCM audio samples in [-1.0, 1.0] for multimodal decisions. */
+  audioSamples?: Float32Array;
   /** Optional AbortSignal to cancel an in-flight evaluation. */
   signal?: AbortSignal;
 }
@@ -94,8 +142,19 @@ export declare interface ClassifierEvaluateOptions {
  * Question configuration for a Boolean Predicate evaluation.
  */
 export declare interface BooleanQuestion {
-  /** The natural language boolean condition to evaluate. */
-  condition: string;
+  /**
+   * The natural language boolean condition to evaluate. Optional when both
+   * `positiveExamples` and `negativeExamples` are given.
+   */
+  condition?: string;
+  /**
+   * Example inputs for which the answer is true / false. With both, embedding
+   * models fit a classifier on them.
+   */
+  positiveExamples?: string[];
+  negativeExamples?: string[];
+  /** How examples and inputs are embedded. Only used with examples. */
+  inputPrompt?: InputPrompt;
   /** Probability threshold for true. Defaults to 0.5. */
   threshold?: number;
   /**
@@ -116,6 +175,10 @@ export declare interface BooleanQuestion {
   options?: ClassifierOption[];
   /** Optional domain or schema context prepended to the condition. */
   context?: string;
+  /** Optional raw encoded image bytes (PNG, JPEG, WebP, or TGA) for the context. */
+  imageBytes?: Uint8Array;
+  /** Optional mono 16kHz PCM audio samples in [-1.0, 1.0] for the context. */
+  audioSamples?: Float32Array;
 }
 
 /**
@@ -124,6 +187,19 @@ export declare interface BooleanQuestion {
 export declare interface ChoiceQuestion {
   /** Map of choice keys to descriptive phrases or criteria. */
   criteria?: Record<string, string>;
+  /**
+   * Map of choice keys to example inputs (embedding models). If any choice
+   * has examples, every choice needs at least one; the keys must match
+   * `criteria` / `options` when those are given, and can replace them.
+   */
+  examples?: Record<string, string[]>;
+  /** How examples and inputs are embedded. Only used with examples. */
+  inputPrompt?: InputPrompt;
+  /**
+   * With examples, weights each choice by N / (K * N_c), so that choices with
+   * fewer examples aren't penalized. Defaults to true.
+   */
+  balanceClassWeights?: boolean;
   /**
    * Ordered list of candidate options with `{ label, description }`.
    * Can be provided instead of or alongside `criteria`.
@@ -148,6 +224,10 @@ export declare interface ChoiceQuestion {
    * log-probability space to eliminate positional or label bias.
    */
   normalizePrior?: boolean;
+  /** Optional raw encoded image bytes (PNG, JPEG, WebP, or TGA) for the context. */
+  imageBytes?: Uint8Array;
+  /** Optional mono 16kHz PCM audio samples in [-1.0, 1.0] for the context. */
+  audioSamples?: Float32Array;
 }
 
 /**
@@ -171,10 +251,20 @@ export declare interface ScoreQuestion {
   instructions?: string;
   /** Optional domain or schema context prepended to instructions. */
   context?: string;
+  /** Optional raw encoded image bytes (PNG, JPEG, WebP, or TGA) for the context. */
+  imageBytes?: Uint8Array;
+  /** Optional mono 16kHz PCM audio samples in [-1.0, 1.0] for the context. */
+  audioSamples?: Float32Array;
 }
 
 /**
  * Options to configure the MediaPipe Semantic Decision Maker Task.
+ *
+ * Note: On Web, `baseOptions.delegate` defaults to `'GPU'` (WebGPU).
+ * `.litertlm` containers with external weights (such as EmbeddingGemma 2 and
+ * Gemma 4) require WebGPU on Web and do not support `delegate: 'CPU'`.
+ * Setting `baseOptions.delegate` to `'CPU'` on Web is only supported for
+ * `.task` or inline `.tflite` models (such as Laya).
  */
 export declare interface DecisionMakerOptions extends TaskRunnerOptions {
   /** Backend type (0=AUTO, 1=ENCODER, 2=DIRECT_LOGIT, 3=EMBEDDING). */
